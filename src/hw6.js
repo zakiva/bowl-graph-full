@@ -1,644 +1,613 @@
 // =============================================================================
 // Computer Graphics - Exercise 6 - Interactive Bowling Game
+// MILESTONE 1: STRUCTURAL SETUP & STATE MACHINE ARCHITECTURE
 // =============================================================================
-//
-// STARTING POINT
-// --------------
-// HW06 builds directly on the static bowling alley you created in HW05.
-//
-//   >>> Copy the full contents of your completed HW05 `hw5.js` into this file <<<
-//   >>> (everything that builds the lane, markings, gutters, pins, the ball,  <<<
-//   >>> the lighting, the UI containers, and the orbit camera), then add the  <<<
-//   >>> HW06 interactive systems marked with `// TODO (HW06)` below.          <<<
-//
-// The bare starter scene below is the SAME one you were given in HW05, so the
-// project runs out of the box. Replace `createBowlingLane()` and the rest with
-// your finished HW05 scene before you start on the HW06 features.
-//
-// HW06 adds the INTERACTIVE layer on top of the static scene:
-//   1. Aiming & controls (move/aim the ball, oscillating power meter, release)
-//   2. Simplified ball physics (rolling, gutter balls, optional curve)
-//   3. Pin collision & toppling
-//   4. 10-frame bowling scoring
-//   5. Game flow (frames, reset, end-of-roll detection)
-//
-// Use simplified, hand-written physics in the animate() loop. Do NOT add an
-// external physics engine.
-// =============================================================================
-
-// ============================================================================
-// COMPUTER GRAPHICS - MASTER BOWLING ALLEY SIMULATION ENGINE
-// ============================================================================
 
 import { OrbitControls } from './OrbitControls.js';
 
+// ============================================================================
 // 1. CORE WEBGL GLOBAL CONTEXT INITIALIZATION
-// Instantiate the root Scene object which serves as the top-level 3D container tree for all meshes, lights, and cameras
+// ============================================================================
+
+// Instantiate the master scene container to manage the 3D entity graph hierarchy
 const scene = new THREE.Scene();
 
-// Initialize a Perspective Camera to mimic the optical properties of human eyes where objects further away appear smaller
-// Arguments: Field of View (75°), Aspect Ratio fraction, Near clipping boundary plane (0.1), Far clipping limit boundary (1000)
+// Initialize camera with a 75-degree Field of View to emulate natural human perspective matrix splits
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 
-// Instantiate the core WebGL Renderer component responsible for translating our vector math mathematical matrices onto screen pixels
-// Enable internal hardware antialiasing passes to eliminate jagged stair-step artifacts along high-contrast silhouettes
+// Instantiate hardware WebGL renderer tracking multisample antialiasing passes to avoid jagged edge silhouettes
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 
-// Match the drawing frame buffer size allocation to fill the active user browser window viewport configuration dimensions exactly
+// Bind drawing buffer dimensions to fill user browser layout boundaries perfectly
 renderer.setSize(window.innerWidth, window.innerHeight);
 
-// Mount the compiled WebGL graphics canvas HTML element directly into the visible document object model body layer
+// Append raw compiled WebGL HTML canvas node directly into document DOM framework
 document.body.appendChild(renderer.domElement);
 
-// Apply a uniform dark midnight blue background hex fill color value directly to clear the frame color buffer every render frame
+// Assign midnight blue background hex tint clear color for space rendering loops
 scene.background = new THREE.Color(0x1a1a2e);
 
 
 // ============================================================================
-// SYSTEM ILLUMINATION LOGIC & DYNAMIC DEPTH SHADOW MAP LAYOUTS
+// 2. SYSTEM ILLUMINATION LOGIC & DYNAMIC DEPTH SHADOW MAP LAYOUTS
 // ============================================================================
 
-// Initialize an un-targeted Ambient Light source to uniformly brighten up dark face polygons and simulate bounced scatter light
-// Arguments: Light tint color hex representation (pure white), radiant intensity scalar coefficient multiplier (0.5 strength)
+// Setup non-directional light source to establish global base ambient exposure fill metrics
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
-
-// Add the configured ambient light node directly into our root active scene graph layout index array for global application
+// Mount ambient light group node straight into main root rendering index array
 scene.add(ambientLight);
 
-// Instantiate a high-power overhead Directional Light source emitting parallel vector light rays to simulate long lane fixtures
-// Arguments: Light tint color hex value (white), radiant beam strength scale intensity threshold modifier (0.8 strength)
+// Instantiate high-intensity overhead lane lighting simulator radiating uniform parallel vectors
 const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-
-// Position the light vector origin high overhead, offset slightly right, and far down-lane to project crisp directional shadow maps
-// Coordinates: X = 5 (right side flank spread), Y = 20 (high ceiling elevation plane), Z = -20 (positioned forward toward the pins)
-// Update: trying to change to z=20 to add more lights on the pins - Verified. 
+// Displace primary light source up, right, and forward to cascade sharp, clean diagonal shadow lines down the lane
 directionalLight.position.set(5, 20, 20);
-
-// Localized overhead light to fully illuminate the pin deck area
-const pinDeckLight = new THREE.DirectionalLight(0xffffff, 0.4);
-pinDeckLight.position.set(0, 10, -55); // Directly above the pin formation
-pinDeckLight.castShadow = true;
-scene.add(pinDeckLight);
-
-// Append the overhead directional light source transform pointer reference directly into our root scene hierarchy index
+// Commit directional light node pointer to root scene index tracking loops
 scene.add(directionalLight);
 
-// Set the global master renderer state configuration variable to true to enable dynamic stencil shadow depth calculation matrices
-renderer.shadowMap.enabled = true;
+// Setup localized high-angle pinpoint spot simulator strictly illuminating the back target pin layout deck
+const pinDeckLight = new THREE.DirectionalLight(0xffffff, 0.4);
+// Offset directly over the pin formation coordinates to cast distinct vertical drops onto the deck surface
+pinDeckLight.position.set(0, 10, -55);
+// Enable shadow pass rendering tracks exclusively on the target zone projector
+pinDeckLight.castShadow = true;
+// Save structural pin deck spot lamp configuration into root scene tree
+scene.add(pinDeckLight);
 
-// Configure this specific directional light object source instance to compile and actively project real-time depth occlusion masks
+// Enable hardware stencil tracking buffers inside master renderer to generate real-time depth shadowing
+renderer.shadowMap.enabled = true;
+// Force parallel primary light source to actively compile depth texture occlusion map sheets
 directionalLight.castShadow = true;
 
 
 // ============================================================================
-// MATHEMATICAL COORDINATE SYSTEM UTILITIES
+// 3. MATHEMATICAL COORDINATE SYSTEM UTILITIES
 // ============================================================================
 
-// Helper conversion subroutine transforming degree angular values into standard Cartesian radian metrics required by Three.js
+// Transform standard human-readable degrees into Cartesian radian values required by raw Three.js rotation vectors
 function degrees_to_radians(degrees) {
   var pi = Math.PI;
-  // Calculate conversion: multiply input scalar degrees by Pi divided by a standard half-circle angular index limit (180)
+  // Standard conversion equation: Multiply input scalar by Pi and scale fractionally by 180 degrees
   return degrees * (pi / 180);
 }
 
 
 // ============================================================================
-// MASTER ALLEY INFRASTRUCTURE CREATION FUNCTION
+// 4. MASTER ALLEY INFRASTRUCTURE CREATION FUNCTION
 // ============================================================================
 function createBowlingLane() {
   
-  // --------------------------------------------------------------------------
-  // PHYSICAL FLOORS, PLATES, AND DRAINAGE INFRASTRUCTURE
-  // --------------------------------------------------------------------------
-
   // MAIN WOOD LANE PLATFORM
-  // Allocate hardware memory structures tracking a standard box profile matching standard regulation lane proportions
-  // Specs: Width (3.5 units), physical vertical core thickness thickness (0.2), lane length extension span (60)
+  // Allocate dimensions for standard regulation lane: 3.5 wide, 0.2 thick, extending 60 units down-range
   const laneGeometry = new THREE.BoxGeometry(3.5, 0.2, 60);
-  
-  // Construct a reflective material fragment shader layout model to enable dynamic light specular reflection maps
+  // Establish high-specularity glossy surface material behavior simulating freshly varnished maple lane boards
   const laneMaterial = new THREE.MeshPhongMaterial({
-    color: 0xDEB887,  // Light maple wood floor varnish tint hex representation code
-    shininess: 80     // Sets a high specularity index score to generate a polished, glossy lane appearance
+    color: 0xDEB887,  // Light maple wood hexadecimal color signature representation
+    shininess: 80     // Promotes prominent light pipe reflections down the surface channel
   });
-  
-  // Blend spatial coordinate vertex data tracking bounds and material shaders together into a visible independent Mesh object
+  // Mix geometry structures and material shaders together into a visible independent scene Mesh object
   const lane = new THREE.Mesh(laneGeometry, laneMaterial);
-  
-  // Translate the box -30 units along the Z axis to center the 60-unit block, placing the lane entrance (Foul Line) exactly at Z = 0
+  // Shift block back 30 units on Z axis to map the start line (Foul Line) precisely at Z = 0 coordinates
   lane.position.set(0, 0, -30);
-  
-  // Instruct active graphics fragment passes to capture dynamic shadow mapping textures overlapping this floor plane
+  // Register lane surface plane to intercept incoming shadow projection cascades
   lane.receiveShadow = true;
-  
-  // Allow the physical boundaries of this lane mesh block to actively cast baseline depth values onto elements below
+  // Permit physical edges of lane block to throw baseline occlusion shadows downward
   lane.castShadow = true;
-  
-  // Insert the compiled master lane mesh instance tree pointer straight into our master view scene array node
+  // Append physical lane mesh structure directly into master view tree array index
   scene.add(lane);
 
-
   // PLAYER APPROACH RUNWAY PLATFORM
-  // Define physical boundaries tracking the player stance walkway track stretching out right behind the foul line boundary
-  // Sizing: Width matches lane floor (3.5), vertical deck thickness matches lane (0.2), approach length scales out 15 units
+  // Build standing approach deck tracking 3.5 wide, 0.2 depth matching lane thickness, extending 15 units back
   const approachGeometry = new THREE.BoxGeometry(3.5, 0.2, 15);
-  
-  // Differentiate approach walkways visually by selecting a less glossy, un-buffed warmer satin wood finish hue
+  // Emphasize traction properties using less reflective, warmer satin wood compound shaders
   const approachMaterial = new THREE.MeshPhongMaterial({
-    color: 0xCD853F,  // Peru rich wood floorboard tone hexadecimal designation
-    shininess: 50     // Lower specularity coefficient simulates high shoe-traction properties for player sliding steps
+    color: 0xCD853F,  // Peru rich walnut floorboard tone hexadecimal designation identity
+    shininess: 50     // Lower specularity value simulates high footwear traction profile responses
   });
-  
-  // Instantiate the standalone runway platform block object structure inside our virtual scene index array
+  // Instantiate runway player stance floor block object reference in memory space
   const approach = new THREE.Mesh(approachGeometry, approachMaterial);
-  
-  // Position the approach zone behind the foul line (`Z = 0`), extending into positive Z space.
-  // Setting `Z = 7.5` places the center of this 15-unit block exactly between `Z = 0` and `Z = 15`.
+  // Position behind the foul line (extends into positive Z), center point set exactly at midplane Z = 7.5
   approach.position.set(0, 0, 7.5);
-  
-  // Configure approach platform surface planes to capture dynamic shadows cast from balls or players standing on it
+  // Configure approach runway to receive dynamic drop shadowing cast from players or balls
   approach.receiveShadow = true;
-  
-  // Ensure the structural side edges of the approach boundary contribute accurate values to global shadow generation passes
+  // Ensure framework side boundaries contribute values to ambient occlusion rendering tracking loops
   approach.castShadow = true;
-  
-  // Mount the finished player approach runway platform component directly into the live scene rendering tree
+  // Insert runway walkway block mesh straight to system scene graphics hierarchy index
   scene.add(approach);
 
-
   // FLANKING BALL DROP GUTTER TRACKS
-  // Generate the side drainage drop tracks utilizing narrow elongated bounding boxes parallel to the main lane profile
-  // Structural settings: Width (0.4 units), thickness height depth (0.1, half the lane level), length extends full length (60)
+  // Define narrow low-clearance boxes spanning full 60 unit lane lengths to catch off-track rolls
   const gutterGeometry = new THREE.BoxGeometry(0.4, 0.1, 60);
-  
-  // Setup a matte low-reflection compound shader profile to simulate dark industrial synthetic gutter composite materials
+  // Create completely flat non-reflective matte finish to replicate dark composite synthetic drainage materials
   const gutterMaterial = new THREE.MeshPhongMaterial({
-    color: 0x2c3e50,  // Dark slate navy gray hex color code profile identity
-    shininess: 20     // Flat diffusion profile prevents light reflections from bleeding over onto the wood lane
+    color: 0x2c3e50,  // Dark slate steel navy grey hue identity map code
+    shininess: 20     // Low scattering coefficient blocks bright wood light bleed artifacts from washing over gutters
   });
 
-  // Assemble the left side gutter track mesh child layout instance
+  // Construct left side drainage trench module mesh frame
   const leftGutter = new THREE.Mesh(gutterGeometry, gutterMaterial);
-  
-  // Math: Lane center is 0. Left lane edge sits at -1.75 (3.5 / 2). Gutter half-width is -0.2 (0.4 / 2).
-  // Total X coordinate = -1.75 + (-0.2) = -1.95. Position Y at -0.05 to depress its deck line visibly below the lane.
+  // Align left lane rim at X = -1.95, offset down Y = -0.05 to depress track visibly below wood lane surface
   leftGutter.position.set(-1.95, -0.05, -30);
-  
-  // Force left hand drainage channels to receive cast shadows dropped from tracking items sliding nearby
+  // Force gutter geometry paths to capture real-time shadows dropped from rolling spheres
   leftGutter.receiveShadow = true;
-  
-  // Append the completed left structural channel directly into our master visible world simulation group index
+  // Save left channel assembly pointer node directly into master world collection array
   scene.add(leftGutter);
 
-  // Assemble the right side gutter track mesh child layout instance
+  // Construct right side drainage trench module mesh frame
   const rightGutter = new THREE.Mesh(gutterGeometry, gutterMaterial);
-  
-  // Math: Mirroring the left track, the right lane boundary sits at +1.75. Add half of the gutter width (+0.2).
-  // Total X coordinate = 1.75 + 0.2 = 1.95. Position Y dropped at -0.05 and Z centered parallel at -30.
+  // Mirror left geometry setup tracking parallel right lane rim alignment at positive boundary X = 1.95
   rightGutter.position.set(1.95, -0.05, -30);
-  
-  // Force right hand drainage channels to receive cast shadows dropped from tracking items sliding nearby
+  // Force gutter geometry paths to capture real-time shadows dropped from rolling spheres
   rightGutter.receiveShadow = true;
-  
-  // Append the completed right structural channel directly into our master visible world simulation group index
+  // Save right channel assembly pointer node directly into master world collection array
   scene.add(rightGutter);
 
-
   // REINFORCED COMPOSITE TARGET PIN DECK PLATE
-  // Configure the high-impact base sheet layer located at the far terminal end to ground the pin setup array
-  // Sheet sizing: Width covers lane (3.5), depth thickness layer (0.01), length covers pin formation space (5)
+  // Model thin heavy-impact base layer sheet designed to structurally ground pin formation arrangements
   const pinDeckGeometry = new THREE.BoxGeometry(3.5, 0.01, 5);
-  
-  // Differentiate the pin deck zone floorboards by generating an independent light grey synthetic layout face skin
+  // Differentiate target landing zone via high-visibility light grey satin texture skin profile
   const pinDeckMaterial = new THREE.MeshPhongMaterial({
-    color: 0xD3D3D3,  // High-visibility matte light grey hex color spectrum assignment code
-    shininess: 40     // Standard non-glare satin light scattering properties
+    color: 0xD3D3D3,  // Matte silver industrial polymer overlay palette hex mapping index
+    shininess: 40     // Neutral scatter threshold prevents overhead lamps from causing distracting glare paths
   });
-  
-  // Instantiate the final standalone structural pin deck base mesh object into system scene graphs
+  // Instantiate final standalone pin framework platform deck plate mesh in memory structure
   const pinDeck = new THREE.Mesh(pinDeckGeometry, pinDeckMaterial);
-  
-  // Position center at Z = -57.5 (covering Z = -55 to Z = -60). Lift vertical height Y to 0.101 so it mounts perfectly flush
-  // on top of the main lane platform (which sits at Y = 0.1) without encountering rendering layout overlap bugs.
+  // Center Z at -57.5, elevate Y to 0.101 to mount flush on top of lane surface without causing rendering artifact flickers
   pinDeck.position.set(0, 0.101, -57.5);
-  
-  // Enable the rear pin deck floor plate to receive cast drop shadow textures generated from standing pins
+  // Enable structural plate floor skin to actively trace shadow distributions thrown from standing pins
   pinDeck.receiveShadow = true;
-  
-  // Commit the structural pin deck component securely into our primary master scene tree layout index array
+  // Mount target foundation plate mesh block into active root rendering scene layout group
   scene.add(pinDeck);
 
-
-  // --------------------------------------------------------------------------
-  // ANALYTICAL SURFACE VECTOR MARKINGS
-  // --------------------------------------------------------------------------
-  // DEPTH BUFFER MITIGATION CONFIGURATION: To permanently prevent "Z-Fighting" bugs where overlapping flat
-  // planes struggle for drawing priority and flicker randomly, all vector indicators sit elevated at Y = 0.102.
-
   // REGULATION FOUL LINE STRIPE
-  // Create a flat 2D lane boundary indicator crossing full width with an explicit structural depth thickness of 0.08 units
+  // Model thin transverse flat boundary plane checking full 3.5 lane width with tight 0.08 depth striping
   const foulLineGeometry = new THREE.PlaneGeometry(3.5, 0.08);
-  
-  // Use a cost-effective MeshBasicMaterial because simple solid color lines do not require lighting or specularity calculations
-  const foulLineMaterial = new THREE.MeshBasicMaterial({ color: 0xE74C3C }); // Standard tournament warning red hex color code
+  // Leverage basic material shaders to skip unnecessary lighting math updates on a pure static color vector line
+  const foulLineMaterial = new THREE.MeshBasicMaterial({ color: 0xE74C3C }); // Standard red warning marker hue
   const foulLine = new THREE.Mesh(foulLineGeometry, foulLineMaterial);
-  
-  // Situate line edge intersection exactly at Z = 0. Float Y to 0.102 to clear the lower floorboard bounds safely.
+  // Situate target intercept line precisely at Z = 0, elevating Y to 0.102 to clear lower floor bounds safely
   foulLine.position.set(0, 0.102, 0);
-  foulLine.rotation.x = degrees_to_radians(-90); // Rotate 2D plane primitive 90 degrees forward to lay completely face up
+  // Pivot 2D plane geometry 90 degrees forward around local X-axis to lay face up flat on the floorboards
+  foulLine.rotation.x = degrees_to_radians(-90);
+  // Mount red threshold separator line mesh into live viewport graph configuration
   scene.add(foulLine);
 
-
   // APPROACH ALIGNMENT DOTS
-  // Allocate exact 2D circle shapes to generate high-fidelity circular player tracking markers across the wood floor
-  // Sizing parameters: Circular radius size (0.04 units), smooth perimeter triangulation interpolation count (32 steps)
+  // Allocate circular geometry metrics tracking tight 0.04 radius curves handled via smooth 32-point perimeter interpolation loops
   const dotGeometry = new THREE.CircleGeometry(0.04, 32);
-  const dotMaterial = new THREE.MeshBasicMaterial({ color: 0x222222 }); // Deep ink charcoal black color mask
-  const dotPositionsX = [-1.2, -0.6, 0, 0.6, 1.2]; // Precise horizontal offset lines crossing width layout tracks
-  const dotRowsZ = [2.0, 7.0]; // Two independent row paths positioned along the length of the player approach zone
+  const dotMaterial = new THREE.MeshBasicMaterial({ color: 0x222222 }); // Deep charcoal tracking indicator tint
+  const dotPositionsX = [-1.2, -0.6, 0, 0.6, 1.2]; // Standard width track tracking positions
+  const dotRowsZ = [2.0, 7.0]; // Dual length row markers mapping player step adjustments across the runway
 
-  // Run nested iteration sweeps to distribute the double row marker circle index meshes cleanly
-  dotRowsZ.forEach((zPos) => { // Outer loop path: Step sequentially along the length tracking depth down the approach runway
-    dotPositionsX.forEach((xPos) => { // Inner loop path: Align components horizontally crossing across the width track
-      const dot = new THREE.Mesh(dotGeometry, dotMaterial); // Allocate a fresh circular vector indicator mesh reference
-      dot.position.set(xPos, 0.102, zPos); // Center dot at intersecting grid slot, floating just over floorboards
-      dot.rotation.x = degrees_to_radians(-90); // Pivot plane 90 degrees forward around X to face skyward flat
-      scene.add(dot); // Save instance into active scene array tree
+  // Distribute alignment tracking dots across the approach layout grid using nested loop parsing structures
+  dotRowsZ.forEach((zPos) => {
+    dotPositionsX.forEach((xPos) => {
+      const dot = new THREE.Mesh(dotGeometry, dotMaterial); // Build separate circular indicator instance geometry
+      dot.position.set(xPos, 0.102, zPos); // Align marker directly over mapped intersection point, floating just over wood grains
+      dot.rotation.x = degrees_to_radians(-90); // Tilt plane 90 degrees forward to overlay flat on runway deck
+      scene.add(dot); // Save tracking instance node directly into live graphics scene index
     });
   });
 
-
   // LANE TARGETING CHEVRONS (AIMING ARROWS)
-  // Design Architecture: Initializing a flat CircleGeometry restricted to exactly 3 perimeter segments forces a triangle plane.
-  // This satisfies requirements to engineer native "chevron arrowhead shapes utilizing flat geometric plane models".
-  // Sizing parameters: Bounding radius threshold scale (0.14), radial segments locked to 3 (triangle configuration)
+  // Restricting CircleGeometry bounds to exactly 3 perimeter loops generates clean, lightweight triangle vectors
   const arrowGeometry = new THREE.CircleGeometry(0.14, 3);
-  const arrowMaterial = new THREE.MeshBasicMaterial({ color: 0x222222 });
+  const arrowMaterial = new THREE.MeshBasicMaterial({ color: 0x222222 }); // Dark charcoal target mark fill
   
-  // Configure layout vector settings mapping an accurate symmetrical chevron V-formation pointing down-lane
-  // The central apex arrow locks exactly 15 units out at Z = -15.0, with outer flank pairs tapering back symmetrically.
+  // Configure explicit spatial mapping coordinates laying out a standard V-formation pattern pointing down-lane
   const arrowOffsets = [
-    { x: 0, z: -15.0 },       // Core tracking apex center target chevron (exactly 15 units out from foul line)
-    { x: -0.4, z: -14.6 }, { x: 0.4, z: -14.6 }, // First interior flank branch pairs bordering the core track
-    { x: -0.8, z: -14.2 }, { x: 0.8, z: -14.2 }, // Intermediate flank branch chevron pairs widening outward
-    { x: -1.2, z: -13.8 }, { x: 1.2, z: -13.8 }  // Outer wing indicator chevron marks bordering adjacent gutter tracks
+    { x: 0, z: -15.0 },       // Core centerline apex tracking chevron target (exactly 15 units down-lane)
+    { x: -0.4, z: -14.6 }, { x: 0.4, z: -14.6 }, // Primary interior tracking flank branch pairs
+    { x: -0.8, z: -14.2 }, { x: 0.8, z: -14.2 }, // Secondary intermediate tracking chevron sets
+    { x: -1.2, z: -13.8 }, { x: 1.2, z: -13.8 }  // Outer wing tracking limits bordering gutter edges
   ];
 
-  // Loop across definitions array block to assemble every target chevron indicator model into active memory
+  // Instanciate and distribute each calculated targeting chevron structure down the lane channel
   arrowOffsets.forEach((offset) => {
-    const arrow = new THREE.Mesh(arrowGeometry, arrowMaterial); // Instantiate fresh independent flat triangle mesh pointer
-    arrow.position.set(offset.x, 0.102, offset.z); // Align arrowhead to its matching track slot over the maple boards
-    arrow.rotation.x = degrees_to_radians(-90); // Twist 90 degrees forward on X to sit flat facing skyward
-    arrow.rotation.z = degrees_to_radians(30); // Rotate 30 degrees around local Z to lock the sharp vertex pointing down-lane towards negative Z
-    scene.add(arrow); // Save element pointer node straight to root scene graph index list
+    const arrow = new THREE.Mesh(arrowGeometry, arrowMaterial); // Build new distinct triangle mesh element node
+    arrow.position.set(offset.x, 0.102, offset.z); // Position target chevron onto designated wood floor lane coordinate slot
+    arrow.rotation.x = degrees_to_radians(-90); // Flip 90 degrees forward around local X axis to lay completely flat
+    arrow.rotation.z = degrees_to_radians(30); // Twist 30 degrees around local Z axis to orient the triangle vertex towards negative Z (pins)
+    scene.add(arrow); // Save configured indicator mesh pointer directly into master scene render structure
   });
 }
 
-// Invoke lane creation module to draw physical components and indicators into the scene matrix
+// Fire master infrastructure script to construct and place physical lane layouts inside virtual environment
 createBowlingLane();
 
 
 // ============================================================================
-// PROCEDURAL COMPONENT PIN ASSEMBLY & TRIANGULAR DEPLOYMENT
+// 5. PROCEDURAL PIN ASSEMBLY & TRIANGULAR DEPLOYMENT
 // ============================================================================
 
-// PROCEDURAL COMPONENT CONSTRUCTION & MATERIAL ATTRIBUTE WRAPPER
-// Factory script processing composite shapes into a single complete tracking group modeling a regulation pin
+// Component factory scripting processing stacked primitive geometries to construct a unified regulation pin model group
 function createBowlingPin() {
-  // Create an independent Group node to manage transformations across all internal child meshes collectively
+  // Instantiate empty parent Group node container to bundle and transform child component parts collectively
   const pinGroup = new THREE.Group();
 
-  // Define highly polished white plastic coating parameters for primary pin body layers
+  // Create ultra-glossy bright white finish settings matching regulation tournament composite protective plastic coatings
   const pinWhiteMaterial = new THREE.MeshPhongMaterial({
-    color: 0xffffff,   // Pure brilliant regulation tournament white color hex
-    shininess: 100     // Ultra-high specularity yields sharp glass-like reflections catching overhead rays
+    color: 0xffffff,   // Brilliant pure white hexadecimal tint definition mask
+    shininess: 100     // Highly reflective specular profile generates clean mirror highlights from room lamps
   });
 
-  // Define solid vibrant red paint material shader properties to color the target tracking neck stripe bands
+  // Create matching high-gloss dark crimson material properties to paint identifier neck trim bands
   const pinRedMaterial = new THREE.MeshPhongMaterial({
-    color: 0xd32f2f,   // Standard crimson red tournament identifier hex color
-    shininess: 100     // Matches uniform gloss coats to prevent visual fragment mismatches under lighting loops
+    color: 0xd32f2f,   // Standard tournament crimson red identifier hex value configuration
+    shininess: 100     // Glossiness matching the white coat preserves physical coherence under light parsing passes
   });
 
   // PIN LOWER BELLY BODY COMPONENT
-  // Generate a tapered cylinder primitive mapping out the wide bottom base belly curve profiles of a pin
-  // Dimensions: Top circle radius (0.2), bottom base circle radius (0.13), total slice vertical height (0.55), segments (32)
+  // Generate a tapered cylinder to establish the wide lower body belly contours of a regulation pin shape
   const baseGeometry = new THREE.CylinderGeometry(0.2, 0.13, 0.55, 32);
   const baseMesh = new THREE.Mesh(baseGeometry, pinWhiteMaterial);
-  // Shift center vertical position upward by half its height to sit flush over the local group pivot baseline (Y = 0)
+  // Elevate half its height vertically to establish base baseline seating precisely at internal pivot level Y = 0
   baseMesh.position.y = 0.275; 
-  baseMesh.castShadow = true;     // Permit belly body polygons to intercept directional rays and drop shadows
-  baseMesh.receiveShadow = true;  // Enable surface sections to receive ambient shadow overlays
-  pinGroup.add(baseMesh);         // Inject child mesh node securely inside parent pin coordination group folder container
+  baseMesh.castShadow = true;     // Permit belly body polygons to block ray patterns and project dynamic shadows
+  baseMesh.receiveShadow = true;  // Enable surface skins to trace surrounding shadow projections
+  pinGroup.add(baseMesh);         // Bind lower belly child mesh structure into parent coordinate tracking folder group
 
   // PIN TAPERED SLENDER NECK COLUMN
-  // Model the narrow inward-sloping neck column transitions utilizing an inverted slender cone cylinder segment
-  // Dimensions: Top head join radius (0.08), bottom base join radius (0.2), segment vertical height (0.45), segments (32)
+  // Leverage inverted conical cylinder geometry maps to form the slender neck transitions of the pin structure
   const neckGeometry = new THREE.CylinderGeometry(0.08, 0.2, 0.45, 32);
   const neckMesh = new THREE.Mesh(neckGeometry, pinWhiteMaterial);
-  // Position vertically right on top of the base mesh rim. Height center equation: base length + half neck length: 0.55 + 0.225 = 0.775.
+  // Position vertically right on top of base belly cylinder rim line boundary markers (0.55 base height + 0.225 half neck)
   neckMesh.position.y = 0.775;
-  neckMesh.castShadow = true;     // Attach shadow processing properties
-  neckMesh.receiveShadow = true;
-  pinGroup.add(neckMesh);         // Bind neck slice child straight into parent tracking coordinate group
+  neckMesh.castShadow = true;     // Inject light blockage tracking properties
+  neckMesh.receiveShadow = true;  // Enable ambient occlusion maps to overlay skin layers
+  pinGroup.add(neckMesh);         // Bind bottleneck slice child mesh securely into parent transformation container group
 
   // PIN IDENTIFICATION RED NECK STRIPE BAND
-  // Assemble a thin hollow ring collar sleeve wrapping exactly around the slim center line of the white neck cylinder
-  // Design Note: Inner radius expanded to 0.111 to wrap over the neck mesh cleanly without structural clipping or Z-fighting.
-  // Dimensions: Top radius scale (0.111), bottom radius scale (0.125), component vertical ring stripe height (0.08), segments (32)
-  // EDIT: Bumping up the radii (0.135 and 0.145) and moving the elevation up to Y = 0.83 
-  // forces the red ring to sit beautifully on the outside skin of the white bottleneck.
+  // Model thin hollow outer ring sleeve tracking slightly expanded radii values to cleanly sleeve neck faces without clipping artifacts
   const stripeGeometry = new THREE.CylinderGeometry(0.135, 0.145, 0.06, 32);
   const stripeMesh = new THREE.Mesh(stripeGeometry, pinRedMaterial);
+  // Displace up target height path Y = 0.83 to locate identifier band precisely on bottleneck skin surface zone
   stripeMesh.position.y = 0.83;
-  
-  stripeMesh.castShadow = true;   // Compute shadow maps tracking the custom colored ring stripes
-  stripeMesh.receiveShadow = true;
-  pinGroup.add(stripeMesh);       // Bind stripe ring component into the parent coordinate node list folder
+  stripeMesh.castShadow = true;   // Calculate shadow traces thrown from contrasting colored identification trim sleeve rings
+  stripeMesh.receiveShadow = true;// Permit environmental shadow mapping processing overlays
+  pinGroup.add(stripeMesh);       // Bind identifier stripe mesh layer directly to parent coordinate folder grouping matrix
 
   // PIN ROUNDED HEAD CROWN CAP
-  // Create a sphere geometry primitive representing the smooth spherical top head tip of the target pin
-  // Dimensions: Crown sphere radius boundary (0.095 units), horizontal latitude steps (32), vertical longitude loops (32)
+  // Allocate perfect sphere primitive modeling the polished spherical dome crowning the top of the pin framework
   const headGeometry = new THREE.SphereGeometry(0.095, 32, 32);
   const headMesh = new THREE.Mesh(headGeometry, pinWhiteMaterial);
-  // Mount the head sphere right on the upper rim of the underlying neck column cylinder box. Elevation height equation: 0.55 + 0.45 = 1.0.
+  // Position sphere right on top of neck rim line at absolute combined altitude level Y = 1.0 units
   headMesh.position.y = 1.0;
-  headMesh.castShadow = true;     // Allow head crowns to block light tracks and calculate cast shadows
-  headMesh.receiveShadow = true;
-  pinGroup.add(headMesh);         // Mount rounded top crown directly inside target parent alignment group node
+  headMesh.castShadow = true;     // Allow head cap polygons to calculate dynamic shadow casting transformations
+  headMesh.receiveShadow = true;  // Accept incoming shadow projection masks safely
+  pinGroup.add(headMesh);         // Lock upper head sphere slice inside the parent structural group container folder
 
-  // Apply a master uniform scale adjustment tweak to verify compiled output proportions match assignment metrics (~1.25 units tall)
+  // Apply master scale modifications ensuring complete model envelope matches project size parameters (~1.25 units high)
   pinGroup.scale.set(1.15, 1.15, 1.15);
 
-  // Return the completed integrated procedural pin group package assembly back to execution triggers
+  // Return full integrated procedural pin assembly composite package folder back to triggering deployment loops
   return pinGroup;
 }
 
-// MASTER REGULATION TRIANGULAR DEPLOYMENT ARRAY CONTROLLER MODULE
+// MILESTONE 1 REFRACTOR: Master global array structure tracking 3D mesh instances and state tracking indices for pins
+let pinsStateArray = [];
+
+// REFACTOR DEPLOYMENT ENGINE: Generates and registers structural pins while binding entries into the tracking state matrix
 function deployPinFormation() {
-  // Input the precise regulation spatial setup matrix tracking grid slots supplied within your assignment manual
-  // System rules map the foul line boundary at Z = 0 with target pins arrayed inside negative Z ranges over the pin deck.
+  // Clear any existing residual meshes from previous operations out of the master system tracking index array
+  pinsStateArray = [];
+
+  // Supply precise regulation triangular layout position offset coordinates specified in target manual instructions
   const pinPositions = [
-    { x:  0.0, z: -57.000 }, // Pin 1  - Front Apex Head Pin (Positioned exactly 57 units out from foul line)
+    { id: 1,  x:  0.0, z: -57.000 }, // Row 1 Apex Head Pin (exactly 57 units out from foul line tracking boundaries)
     
-    { x: -0.5, z: -57.866 }, // Pin 2  - Second row left wedge boundary position
-    { x:  0.5, z: -57.866 }, // Pin 3  - Second row right wedge boundary position
+    { id: 2,  x: -0.5, z: -57.866 }, // Row 2 Left Flank boundary placement position
+    { id: 3,  x:  0.5, z: -57.866 }, // Row 2 Right Flank boundary placement position
     
-    { x: -1.0, z: -58.732 }, // Pin 4  - Third row far left pocket tracking element
-    { x:  0.0, z: -58.732 }, // Pin 5  - Third row absolute heart center axis element
-    { x:  1.0, z: -58.732 }, // Pin 6  - Third row far right pocket tracking element
+    { id: 4,  x: -1.0, z: -58.732 }, // Row 3 Left Outfield pocket pin element tracking locus
+    { id: 5,  x:  0.0, z: -58.732 }, // Row 3 Absolute Center heart-line axis structural pin element
+    { id: 6,  x:  1.0, z: -58.732 }, // Row 3 Right Outfield pocket pin element tracking locus
     
-    { x: -1.5, z: -59.598 }, // Pin 7  - Back row terminal left wing drop corner pin
-    { x: -0.5, z: -59.598 }, // Pin 8  - Back row interior left channel deck foundation pin
-    { x:  0.5, z: -59.598 }, // Pin 9  - Back row interior right channel deck foundation pin
-    { x:  1.5, z: -59.598 }  // Pin 10 - Back row terminal right wing drop corner pin
+    { id: 7,  x: -1.5, z: -59.598 }, // Row 4 Back Left Wing terminal drop corner spot pin
+    { id: 8,  x: -0.5, z: -59.598 }, // Row 4 Back Left Channel foundation base deck spot pin
+    { id: 9,  x:  0.5, z: -59.598 }, // Row 4 Back Right Channel foundation base deck spot pin
+    { id: 10, x:  1.5, z: -59.598 }  // Row 4 Back Right Wing terminal drop corner spot pin
   ];
 
-  // Map across individual coordinate entries to deploy the procedural pin collections down the alley line
+  // Map along each position vector definition entry to initialize models and populate structural state metadata sheets
   pinPositions.forEach((pos) => {
-    // Call our factory processing script to construct a separate, custom structural 3D pin group mesh instance
+    // Invoke factory script processing vectors to construct new autonomous 3D composite pin mesh collections
     const pinInstance = createBowlingPin();
     
-    // Assign position transformations. Y elevation locks at 0.101 so the pin base mounts perfectly flush
-    // on top of the composite grey pin deck layer sheet (which sits at level Y = 0.101) without sinking or floating.
+    // Assign position updates. Set altitude level Y exactly to 0.101 so the bottom rim sits perfectly flush on top of deck plate skin layers
     pinInstance.position.set(pos.x, 0.101, pos.z);
     
-    // Mount the completed, transformed pin collection mesh directly into our primary renderable world scene node array
+    // Mount compiled transformed individual pin group structure into main viewable rendering scene node tree
     scene.add(pinInstance);
+    
+    // MILESTONE 1 INTEGRATION: Push active structural state tracking objects into global tracking array
+    pinsStateArray.push({
+      id: pos.id,                        // Unique integer ID key corresponding with tournament layouts (1-10)
+      mesh: pinInstance,                 // Live reference pointer tracking the actual 3D object inside Three.js graph
+      initialX: pos.x,                   // Store baseline layout X alignment for resetting operations
+      initialZ: pos.z,                   // Store baseline layout Z alignment for resetting operations
+      isStanding: true,                  // Boolean tracking logic state verifying if pin remains standing upright
+      isToppling: false,                 // State tracker verifying if pin is currently running through physics-free tumble actions
+      toppleAngle: 0,                    // Float tracing structural progression of fall path rotation angles
+      toppleDirection: new THREE.Vector3() // Vector3 reserving target direction paths for physics-free fall trajectories
+    });
   });
 }
 
-// Fire the deployment mechanism script to arrange all ten standing target pins onto the rear deck platform
+// Execute deployment manager script to allocate and track all ten target pins over the back deck plate floor plan
 deployPinFormation();
 
 
 // ============================================================================
-// STATIC HIGH-POLISH POLYGON BOWLING BALL
+// 6. STATIC HIGH-POLISH POLYGON BOWLING BALL
 // ============================================================================
+
+// MILESTONE 1 ARCHITECTURE: Declare global reference pointer variable tracking primary ball object for operational manipulation
+let bowlingBall;
+
 function createStaticBowlingBall() {
-  // Create an independent parent transformation Group node to bundle the core sphere and drilled finger holes together
+  // Initialize parent translation Group node to bundle spherical core shell and gripping channel holes collectively
   const ballGroup = new THREE.Group();
 
-  // CORE GEOMETRY & HIGH SPECULARITY SHADER MATERIAL SELECTION
-  // Instantiate an explicit sphere geometry primitive tracking a regulation radius size of exactly 0.45 units (0.9 diameter)
-  // Sizing matrix: Bounding radius (0.45), horizontal width segments (64), vertical height loops (64) for perfect curved smoothness
+  // Model high-density sphere geometry using 64 width/height segment counts to generate pristine continuous curved curves
   const ballGeometry = new THREE.SphereGeometry(0.45, 64, 64);
   
-  // Allocate an ultra-glossy Phong material script model applying a deep reactive cosmic violet theme coat
+  // Allocate ultra-glossy reflective material modeling polished deep cosmic violet shell skin behaviors
   const ballMaterial = new THREE.MeshPhongMaterial({
-    color: 0x2e0854,   // Polished deep cosmic midnight violet plum purple hexadecimal color mask selection code
-    shininess: 140     // Highly elevated specularity coefficient produces crisp mirror-like glints catching room light tubes
+    color: 0x2e0854,   // Deep rich midnight cosmic violet plum purple hexadecimal color token reference
+    shininess: 140     // Highly amplified specularity index catches room light tubes to trace glass-like mirror glints
   });
 
-  // Compile definition settings together into our primary structural core bowling ball mesh object reference
+  // Compile geometry frameworks and material maps together into the primary structural core ball mesh node
   const ballCoreMesh = new THREE.Mesh(ballGeometry, ballMaterial);
-  
-  // Configure the bowling ball core shell mesh to dynamically compute, calculate, and project crisp drop shadows
+  // Instruct lighting passes to compute dynamic depth shadows tracking core spherical surface silhouettes
   ballCoreMesh.castShadow = true;
-  
-  // Allow spherical skin surfaces to receive incoming ambient environmental shadows dropped across them
+  // Permit surface layers to accept overlapping ambient environmental drop shadow mappings cleanly
   ballCoreMesh.receiveShadow = true;
-  
-  // Mount the primary sphere child mesh firmly inside our local bundle coordination group container folder
+  // Securely mount core shell sphere mesh child layer inside local component folder group container
   ballGroup.add(ballCoreMesh);
 
-
   // ASYMMETRIC DRILL PATHS MODELING (GRIPPING HOLES)
-  // Shape structure setup: Tiny dark cylinder primitives embedded slightly into the upper outer face shell of the core ball sphere.
-  // Dimensions: Top radius (0.03), bottom base radius (0.03), depth drill length thickness (0.08), resolution segments (16)
+  // Define small cylinders to clip inner skin faces and simulate drilled finger channels
   const holeGeometry = new THREE.CylinderGeometry(0.03, 0.03, 0.08, 16);
-  
-  // Assign a completely unlit, dead matte pitch black core color index to visually simulate interior hollow hole darkness
+  // Select dead matte completely unlit pitch black color to mask interior hollow hole surfaces with void darkness profiles
   const holeMaterial = new THREE.MeshBasicMaterial({ color: 0x0a0a0a });
 
-  // Define relative local offset positions array mapping standard asymmetric gripping configurations across the upper hemisphere skin zone
-  // Coordinates are mapped as a traditional triangle: two closely spaced finger channels and one distant thumb anchor point.
+  // Map typical asymmetric anatomical finger spread placement offset coordinates relative to top center surface skin zones
   const holeLayouts = [
-    { x: -0.07, y: 0.38, z: -0.20, rotX: 60, rotY: -10 }, // Grip Channel A: Middle Finger drill line (adjacent layout pair left side)
-    { x:  0.07, y: 0.38, z: -0.20, rotX: 60, rotY:  10 }, // Grip Channel B: Ring Finger drill line (adjacent layout pair right side)
-    { x:  0.00, y: 0.28, z:  0.32, rotX: -40, rotY:  0 }  // Grip Channel C: Traditional Thumb drill line (offset single back anchor position)
+    { x: -0.07, y: 0.38, z: -0.20, rotX: 60, rotY: -10 }, // Grip Channel A: Middle Finger drill alignment vector path
+    { x:  0.07, y: 0.38, z: -0.20, rotX: 60, rotY:  10 }, // Grip Channel B: Ring Finger drill alignment vector path
+    { x:  0.00, y: 0.28, z:  0.32, rotX: -40, rotY:  0 }  // Grip Channel C: Traditional single Thumb deep anchor slot line
   ];
 
-  // Loop across definitions array block to drill, align, and mount all three finger hole meshes onto the ball core
+  // Run iterations over alignment mapping sets to sink, pivot, and mount gripping holes into core ball face layers
   holeLayouts.forEach((holeData) => {
-    const holeMesh = new THREE.Mesh(holeGeometry, holeMaterial); // Instantiate a distinct independent dark cylinder mesh node index
-    holeMesh.position.set(holeData.x, holeData.y, holeData.z);  // Position cylinder origin point to cross and clip outer skin borders
+    const holeMesh = new THREE.Mesh(holeGeometry, holeMaterial); // Build autonomous hollow dark cylinder geometry channel index
+    holeMesh.position.set(holeData.x, holeData.y, holeData.z);   // Align hole cylinder origin to clip outer sphere face parameters
     
-    // Rotate cylinder tracks independently to point inward toward core group origin, making holes look realistically drilled
+    // Pivot individual cylinder tracks pointing inward toward core node center to mimic authentic drill profiles
     holeMesh.rotation.x = degrees_to_radians(holeData.rotX);
     holeMesh.rotation.y = degrees_to_radians(holeData.rotY);
     
-    ballGroup.add(holeMesh); // Mount dark finger gripping circle mesh asset directly into our local parent ball grouping container
+    ballGroup.add(holeMesh); // Mount configured dark gripping ring mesh child into local parent ball system folder
   });
 
-
-  // PLATFORM CENTERING & STATIONARY RUNTIME PLACEMENT
-  // Placement: Align ball centered along X axis = 0. Position back on approach track at Z = 4
-  // Height calculation math: Approach platform top surface sits at Y = 0.1. Bounding sphere core radius tracks at 0.45.
-  // Center translation equation: Y = 0.1 (floor level) + 0.45 (radius offset) = 0.55. This forces the ball base to sit perfectly flush *on* the track.
+  // INITIAL PLACEMENT MATH: Approach platform top level sits at Y = 0.1. Bounding sphere core radius tracks at 0.45.
+  // Translation equation: Y = 0.1 (floor level) + 0.45 (radius offset) = 0.55. Centering X at 0 and resting 4 units back on runway Z = 4.
   ballGroup.position.set(0, 0.55, 4);
 
-  // Tilt the ball 45 degrees forward so all 3 holes face up at the camera
+  // Tilt full group 45 degrees forward around X axis so all 3 structural finger holes face upward towards default view perspective
   ballGroup.rotation.x = degrees_to_radians(45);
   
-  // Register the complete composite static bowling ball group system node directly into the master active scene graph collection tree
+  // MILESTONE 1 BINDING: Save parent transformation bundle address directly into the global tracking pointer variable
+  bowlingBall = ballGroup;
+  
+  // Commit fully integrated composite ball group system mesh architecture straight into master active render graph tree index
   scene.add(ballGroup);
 }
 
-// Trigger ball creation script to mount the polished stationary bowling ball onto the player approach runway
+// Trigger bowling ball building script module to place polished reactive sphere entity onto player approach runway track
 createStaticBowlingBall();
 
 
 // ============================================================================
-// CAMERA DESKTOP ORIENTATION VANTAGE STANDPOINT CONFIGURATION
+// 7. CAMERA DESKTOP ORIENTATION VANTAGE STANDPOINT CONFIGURATION
 // ============================================================================
 
-// Initialize an empty transformation identity matrix block tracking camera vector displacements
+// Initialize empty transformation identity matrix block tracking camera spatial coordinate displacements
 const cameraTranslate = new THREE.Matrix4();
-
-// Configure the allocation matrix parameters to transform spatial coordinates for user viewpoints
-// Displacements: No horizontal pan (X=0), elevate camera above walkway (Y=5), pull behind player approach track (Z=12)
+// Configure translation metrics: No horizontal pan (X=0), elevate look point over walkway (Y=5), draw behind approach lane line (Z=12)
 cameraTranslate.makeTranslation(0, 5, 12);
-
-// Pipe compiled matrix operations into the camera container to lock down the default bowler angle viewpoint frame
+// Apply compiled layout matrix operations into camera container properties to establish default stationary bowler viewpoint frame
 camera.applyMatrix4(cameraTranslate);
 
 
 // ============================================================================
-// INTERACTIVE DESKTOP CONSOLE RECEPTION ACTION INTERACTION CODE
+// 8. INTERACTIVE DESKTOP CONSOLE RECEPTION ACTION INTERACTION CODE
 // ============================================================================
 
-// Bind an active instance of OrbitControls monitoring human inputs covering the graphics drawing window canvas
+// Bind raw camera transformations to OrbitControls monitoring mouse drag coordinates across graphics viewport drawing window canvas
 const controls = new OrbitControls(camera, renderer.domElement);
 
-// Instantiate a master boolean status flag determining if mouse coordinate drag tracking loops are active
+// Instantiate master boolean state tracker evaluating if mouse drag scene tracking loops are allowed operation clearances
 let isOrbitEnabled = true;
-let currentView = "bowler"; // Tracks whether we are looking from the bowler or pin perspective
+// Manage current tracking perspective mode splits ('bowler' perspective vs 'pin' landing perspective)
+let currentView = "bowler";
 
-// Evaluate alphanumeric console key events pressed down by the application client user
+// Monitor and parse alphanumeric key codes clicked by the user client down into input handling workflows
 function handleKeyDown(e) {
-  // Validate if keyboard key strokes match capitalized or lowercase character string representations of the "O" key
+  // Check if keyboard keystroke registers an upper or lower-case instance match for the "O" key
   if (e.key === "o" || e.key === "O") {
-    // Invert the boolean state logic flag values cleanly using an algebraic logic inverse switch command
+    // Invert the boolean logic status variable value cleanly using an algebraic logic inverse switch command
     isOrbitEnabled = !isOrbitEnabled;
   }
-  // Toggle between Bowler View and Pin-End View
+  
+  // Parse perspective camera layout toggle requests monitoring triggers on the "V" key
   if (e.key === "v" || e.key === "V") {
     if (currentView === "bowler") {
-      // Snap camera close to the pin deck and change orbit focus to the pins
-      controls.target.set(0, 1, -57);          // Set focus target to center of pin deck
-      camera.position.set(0, 3, -50);          // Position camera slightly above and in front of pins
+      // Snap control focus target matrices precisely onto center coordinate tracks of rear pin deck plate platform
+      controls.target.set(0, 1, -57);          
+      // Position camera entity slightly ahead and above pin array formations to get clear tracking vantage frames
+      camera.position.set(0, 3, -50);          
       currentView = "pin";
     } else {
-      // Reset back to standard Bowler's Perspective
-      controls.target.set(0, 0, 0);            // Reset focus back to the foul line
-      camera.position.set(0, 5, 12);           // Return camera to starter position
+      // Revert focus matrices back onto standard baseline starting layout foul line markings intercept zones
+      controls.target.set(0, 0, 0);            
+      // Restore camera coordinate offsets back onto starting approach runway baseline targets
+      camera.position.set(0, 5, 12);           
       currentView = "bowler";
     }
-    // Force OrbitControls to register the new layout transformation matrix immediately
+    // Command OrbitControls to compile and register revised viewport transformation vectors immediately
     controls.update();
+  }
+
+  // MILESTONE 1 CONTROL ROUTER GATEWAYS: Interface routes keystroke signals into matching state machine hooks
+  // Detailed operations (Aiming adjustments, spacebar velocity triggers, and complete restarts) get fully coded under subsequent milestones
+  if (gameState.phase === 'aiming') {
+    if (e.key === 'ArrowLeft') {
+      // Handled in Milestone 2: Move ball leftwards across approach foul line
+    }
+    if (e.key === 'ArrowRight') {
+      // Handled in Milestone 2: Move ball rightwards across approach foul line
+    }
+  }
+  
+  if (e.key === ' ') {
+    // Handled in Milestone 2: Toggle state mechanics (Aiming -> Power oscillation -> Rolling launch release)
+  }
+  
+  if (e.key === 'r' || e.key === 'R') {
+    // Handled in Milestone 6: Execute master reset routine restoring game state records to baseline values
   }
 }
 
-  // TODO (HW06): add interactive controls, e.g.
-  //   ArrowLeft / ArrowRight : move / aim the ball along the foul line
-  //   ArrowUp   / ArrowDown  : adjust spin / curve (optional)
-  //   Space                  : start the power meter -> lock power -> release
-  //   r                      : reset pins / start a new game
-
-// Attach keyboard window listeners onto the primary web browser global document tree framework scope boundaries
+// Bind keyboard tracking function listeners directly onto browser document frame runtime channel pipelines
 document.addEventListener('keydown', handleKeyDown);
 
 
 // ============================================================================
-// VIEWPORT RESOLUTION DYNAMIC RESPONSIVENESS MODULE
+// 9. VIEWPORT RESOLUTION DYNAMIC RESPONSIVENESS MODULE
 // ============================================================================
 
-// Callback routine correcting screen fraction aspect ratios when scaling or modifying browser boundaries
+// Adaptive callback recalculating aspect ratios and matching vector shapes when viewport screens get resized or deformed
 function onWindowResize() {
-  // Recompute camera aspect ratio fractional maps to correspond with updated width and height screen space allocations
+  // Re-evaluate fractional camera width/height ratios to match updated browser canvas container bounds
   camera.aspect = window.innerWidth / window.innerHeight;
-  // Order camera projection systems to rebuild internal matrix frustum fields to avoid shape compression anomalies
+  // Order camera internal projection systems to build revised frustum field projection matrices to avoid shape distortion stretching bugs
   camera.updateProjectionMatrix();
-  // Readjust active WebGL renderer drawing canvas pixel boundaries to fill the revised screen outline completely
+  // Adjust hardware graphics renderer view block pixels to track modified window outline scale limits perfectly
   renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
-// Map the window resizing trigger wrapper to listen directly to native browser system resize signal pipelines
+// Map window size transformation handler routines to listen directly to native system viewport resize pipeline signals
 window.addEventListener('resize', onWindowResize, false);
 
 
+// =============================================================================
+// 10. HW06 GLOBAL GAME STATE MACHINE ARCHITECTURE (MILESTONE 1 MANDATE)
+// =============================================================================
+
+// Object model organizing game metadata records, tracking array matrices, scorecard registries, and state flags
+const gameState = {
+  // Tracks operational progression indexes of the active game frame loop sequence (1 to 10 regulation frames)
+  currentFrame: 1,
+  
+  // Tracks active ball throw sequence counts inside current frame sequence limits (Roll 1 or Roll 2; extends to Roll 3 on 10th frame)
+  currentRoll: 1,
+  
+  // Enumerable string flag managing input routers and processing logic gates across structural lifecycle phases
+  // States: 'aiming' (setup position) | 'power' (charge launch vector) | 'rolling' (kinematic simulation) | 'resolving' (scoring/cleanup) | 'game_over'
+  phase: 'aiming',
+  
+  // Parameters managing positional transformations, speeds, and forces affecting the active ball mesh element
+  ball: {
+    aimX: 0.0,                         // Current horizontal offset positioning of ball along the foul line channel
+    spinHook: 0.0,                     // Variable saving calculated side acceleration modifiers to derive curvature arc paths
+    powerScale: 0.0,                   // Scalar tracing power charge metrics from timing bar gauge inputs (0.0 to 1.0 caps)
+    velocity: new THREE.Vector3(0,0,0) // Physical 3D velocity vector managing displacement integration loops inside frame cycles
+  },
+  
+  // Structural data grid array organizing thrown score pinfalls, strike markers, and spare tracking flags across all 10 frames
+  scorecard: Array.from({ length: 10 }, (_, index) => ({
+    frameIndex: index + 1,             // Corresponding integer identity label mapping frames 1 through 10
+    rolls: [],                         // Array logging individual pin counts knocked down on explicit throws inside this frame
+    cumulativeTotal: null,             // Running aggregate score sum tallied and rendered into user view windows
+    isStrike: false,                   // Multiplier checking flag recording if all ten pins fell on the initial roll
+    isSpare: false                     // Multiplier checking flag recording if remaining pin setups fell across throw sequence 2
+  })),
+  
+  // Integer keeping active tabs on total count of standing pins still remaining upright on the deck plate
+  pinsStandingCount: 10
+};
+
 
 // =============================================================================
-// HW06 GAME STATE
+// 11. HW06 UI: EXTENDING CONTROLS PANEL OVERLAYS
 // =============================================================================
-// TODO (HW06): Track the state your game needs, for example:
-//   - current frame (1..10) and roll within the frame
-//   - the per-frame / per-roll pin counts that feed the scorecard
-//   - the ball's current phase: 'aiming' | 'power' | 'rolling' | 'resolving'
-//   - the ball's aim position / direction and chosen power
-//   - which pins are still standing
-// const gameState = { ... };
 
-// =============================================================================
-// HW06 UI: CONTROLS LIST + POWER METER + SCORECARD
-// =============================================================================
-// Reuse the HTML containers you created in HW05 (controls list + scorecard) and
-// add a power-meter element here.
-// TODO (HW06): Build the on-screen power meter (an oscillating bar) and render
-// the live 10-frame scorecard (strikes 'X', spares '/', running total).
+// Target default controls guide element box injected from HTML script headers
+const instructionsElement = document.getElementById('controls-container');
 
-// Instructions display (controls list) — extend this with the HW06 controls.
-const instructionsElement = document.createElement('div');
-instructionsElement.style.position = 'absolute';
-instructionsElement.style.bottom = '20px';
-instructionsElement.style.left = '20px';
-instructionsElement.style.color = 'white';
-instructionsElement.style.fontSize = '16px';
-instructionsElement.style.fontFamily = 'Arial, sans-serif';
-instructionsElement.style.textAlign = 'left';
-instructionsElement.innerHTML = `
-  <h3>Bowling Game Controls:</h3>
-  <p>O - Toggle orbit camera</p>
-  <!-- TODO (HW06): document your aiming / power / release / reset controls -->
-`;
-document.body.appendChild(instructionsElement);
+// MILESTONE 1 ENHANCEMENT: Re-write inner text block inside tracking container to clearly outline interactive bowling shortcuts
+if (instructionsElement) {
+  instructionsElement.innerHTML = `
+    <h3>Alley & Game Controls</h3>
+    <p><span class="key-badge">O</span> Toggle Orbit Camera Controls</p>
+    <p><span class="key-badge">Mouse Click + Drag</span> Rotate Camera View</p>
+    <p><span class="key-badge">Scroll Wheel</span> Zoom View In/Out</p>
+    <p><span class="key-badge">Left / Right Arrow</span> Aim / Move Ball Position</p>
+    <p><span class="key-badge">Spacebar</span> Start Gauge / Lock Power & Release</p>
+    <p><span class="key-badge">R</span> Reset Simulation / New Game</p>
+    <p><span class="key-badge">V</span> Toggle Bowler vs Pin-End Vantage Views</p>
+  `;
+}
 
 
 // =============================================================================
-// HW06 PHYSICS & COLLISION (called every frame from animate)
+// 12. HW06 MASTER PHYSICS ENTRY & STATE RESOLUTION LOOPS
 // =============================================================================
-// TODO (HW06): advance the simulation using delta time:
-//   - integrate the ball's position from its velocity (and optional curve)
-//   - detect when the ball enters a gutter (leaves the lane edges) -> gutter ball
-//   - detect ball <-> pin collisions (sphere vs pin bounding cylinder)
-//   - propagate pin <-> pin collisions and animate knocked pins toppling over
-//   - detect end of roll (ball stopped / left the lane), count fallen pins,
-//     update the score, advance the frame, and reset the ball to the approach
-// function updateGame(deltaTime) { ... }
+
+// Unified update controller parsing elapsed framerate timings to update positions and structural checks
+function updateGame(deltaTime) {
+  // Guard clause blocking real-time calculation sweeps if phase properties match static non-rolling state rules
+  if (gameState.phase !== 'rolling' && gameState.phase !== 'resolving') {
+    return;
+  }
+  
+  // Future updates (Milestone 3 & 4):
+  // - Compute position adjustments using velocity metrics: position += velocity * deltaTime
+  // - Perform boundary logic to evaluate gutter ball events (|x| > 1.75 lane limits)
+  // - Execute distance loops to assess sphere-to-cylinder pin collision impacts
+  // - Run cascade tracking vectors across the state tracking matrix to trigger falling pin rotations
+  // - Detect terminal roll endings (Z < -60) to advance state flags from rolling into scoring resolution phases
+}
+
 
 // =============================================================================
-// ANIMATION LOOP
+// 13. MASTER RENDERING & SYSTEM ANIMATION LOOP
 // =============================================================================
+
+// Initialize internal Three.js high-resolution timestamp clock tracker to record performance intervals accurately
+const runtimeClock = new THREE.Clock();
+
 function animate() {
+  // Schedule frame rendering loop callbacks to sync with graphics monitor hardware update refresh marks
   requestAnimationFrame(animate);
 
-  // TODO (HW06): compute deltaTime and call updateGame(deltaTime) here.
+  // Capture precise fraction time segments elapsed since the immediately prior computation cycle pass
+  const deltaTime = runtimeClock.getDelta();
 
-  // Update controls
+  // Pipe delta execution timings down into physics managers to keep calculations completely standard across separate hardware systems
+  updateGame(deltaTime);
+
+  // Manage orbit interaction capability tracking blocks based on toggle settings overrides
   controls.enabled = isOrbitEnabled;
+  
+  // Process tracking matrices inside controls module to update camera perspective adjustments safely
   controls.update();
 
+  // Execute rendering operations mapping current 3D world scene layers down onto active viewport pixels
   renderer.render(scene, camera);
 }
 
+// Ignition sweep: Fire master animation routine loop to initialize game runtime environments
 animate();
-
-// =============================================================================
-// Responsiveness: keep the scene correct when the window is resized.
-// =============================================================================
-window.addEventListener('resize', () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-});
