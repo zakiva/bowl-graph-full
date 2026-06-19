@@ -4,6 +4,7 @@
 // MILESTONE 2: INPUT HANDLING & DYNAMIC POWER METER UI
 // MILESTONE 3: ANALYTICAL BALL PHYSICS & GUTTER DETECTION (BONUS STRIPPED)
 // MILESTONE 4: COLLISION DETECTION & PROCEDURAL PIN TOPPLING (KINETIC DECAY FIX)
+// MILESTONE 5: BOWLING SCORING ENGINE & DOM PANEL SYNCHRONIZATION
 // =============================================================================
 
 import { OrbitControls } from './OrbitControls.js';
@@ -463,6 +464,15 @@ function handleKeyDown(e) {
     controls.update();
   }
 
+  // MILESTONE 5 SAFETY GATE: Ignore active gameplay mechanics inputs if the match scenario enters a terminal game-over phase
+  if (gameState.phase === 'game_over') {
+    // MILESTONE 5 RESTARTER HOOK: Intercept 'R' key presses during the game-over screen to cleanly recycle and start a fresh session
+    if (e.key === 'r' || e.key === 'R') {
+      resetCompleteBowlingGame();
+    }
+    return;
+  }
+
   // Verify system phase permits operational adjustment updates
   if (gameState.phase === 'aiming') {
     // Determine strict scaling modifier to dictate movement distance per active keystroke tap
@@ -513,7 +523,15 @@ function handleKeyDown(e) {
       // Assign the computed scalar velocity straight into the Z-axis of our master tracking velocity Vector3.
       // Value is negative because the lane extends into negative Z-coordinate space.
       gameState.ball.velocity.set(0, 0, -launchSpeed);
+      
+      // MILESTONE 5 STATE BIND: Assert a systemic scoring lockout flag to guarantee frame calculations execute exactly once on pit entry
+      gameState.ball.scoreLogged = false;
     }
+  }
+
+  // MILESTONE 5 INTERACTIVE UTILITY: Map 'R' key keystrokes during active normal phases to permit sudden voluntary resets
+  if (e.key === 'r' || e.key === 'R') {
+    resetCompleteBowlingGame();
   }
 }
 
@@ -555,15 +573,18 @@ const gameState = {
     resolveTimer: 0.0,                 // Simple frame accumulator used to handle automated temporary testing resets
     powerScale: 0.0,                   // Scalar tracing power charge metrics from timing bar gauge inputs (0.0 to 1.0 caps)
     powerOscillationTime: 0.0,         // Timing accumulator tracking elapsed seconds specifically for the sine wave power calculation
-    velocity: new THREE.Vector3(0,0,0) // Physical 3D velocity vector managing displacement integration loops inside frame cycles
+    velocity: new THREE.Vector3(0,0,0),// Physical 3D velocity vector managing displacement integration loops inside frame cycles
+    scoreLogged: false,                // MILESTONE 5: Protection flag locking computation passes down to singular strict evaluations
+    pinsToResetNext: true              // MILESTONE 5: Flow parameter alerting whether the next resolution frame requires a full 10-pin rack reset
   },
   
+  // Structural data grid array organizing thrown score pinfalls, strike markers, and spare tracking flags across all 10 frames
   scorecard: Array.from({ length: 10 }, (_, index) => ({
-    frameIndex: index + 1,             
-    rolls: [],                         
-    cumulativeTotal: null,             
-    isStrike: false,                   
-    isSpare: false                     
+    frameIndex: index + 1,             // Corresponding integer identity label mapping frames 1 through 10
+    rolls: [],                         // Array logging individual pin counts knocked down on explicit throws inside this frame
+    cumulativeTotal: null,             // Running aggregate score sum tallied and rendered into user view windows
+    isStrike: false,                   // Multiplier checking flag recording if all ten pins fell on the initial roll
+    isSpare: false                     // Multiplier checking flag recording if remaining pin setups fell across throw sequence 2
   })),
   
   pinsStandingCount: 10
@@ -571,14 +592,22 @@ const gameState = {
 
 
 // =============================================================================
-// 11. HW06 UI: EXTENDING CONTROLS PANEL & DYNAMIC POWER METER OVERLAYS
+// 11. HW06 UI: PANEL HUD MANIPULATORS & DYNAMIC POWER GAUGE OVERLAYS
 // =============================================================================
 
 // Target default controls guide element box injected from HTML script headers
 const instructionsElement = document.getElementById('controls-container');
 
-// Re-write inner text block inside tracking container to clearly outline interactive bowling shortcuts
-if (instructionsElement) {
+// MILESTONE 5 EXTENSION: Dynamic HUD compiler rewriting shortcuts and attaching live frame, roll, and game status notifications
+function updateHUDControlsText() {
+  if (!instructionsElement) return;
+  
+  // Compile highly descriptive tracking strings showing active frame progress or distinct flashing alert notices upon game termination
+  let matchStatusHUD = `<br><span style="color: #3498db; font-weight: bold; text-transform: uppercase;">Match Status: Frame ${gameState.currentFrame} | Throw ${gameState.currentRoll}</span>`;
+  if (gameState.phase === 'game_over') {
+    matchStatusHUD = `<br><span style="color: #e74c3c; font-weight: bold; font-size: 16px; text-transform: uppercase; animation: blink 1s infinite;">MATCH COMPLETE! Press 'R' to Start Next Game</span>`;
+  }
+  
   instructionsElement.innerHTML = `
     <h3>Alley & Game Controls</h3>
     <p><span class="key-badge">O</span> Toggle Orbit Camera Controls</p>
@@ -588,8 +617,12 @@ if (instructionsElement) {
     <p><span class="key-badge">Spacebar</span> Start Gauge / Lock Power & Release</p>
     <p><span class="key-badge">R</span> Reset Simulation / New Game</p>
     <p><span class="key-badge">V</span> Toggle Bowler vs Pin-End Vantage Views</p>
+    ${matchStatusHUD}
   `;
 }
+
+// Fire starting HUD status write routine
+updateHUDControlsText();
 
 // DYNAMIC POWER METER UI INJECTION
 const powerMeterContainer = document.createElement('div');
@@ -616,11 +649,359 @@ document.body.appendChild(powerMeterContainer);
 
 
 // =============================================================================
-// 14. MILESTONE 4: PIN-TO-PIN CASCADE METHOD WITH KINETIC ENERGY DAMPENING
+// 15. MILESTONE 5: OFFICIAL TEN-FRAME BOWLING SCORING SYSTEM ENGINE
+// =============================================================================
+
+// Mathematical algorithm computing cumulative cascading bowling scorecard configurations with look-ahead bonus checking
+function calculateCompleteBowlingScore() {
+  // Initialize running aggregate accumulator score at 0
+  let runningScoreAccumulator = 0;
+  
+  // Iterate strictly through array nodes corresponding to tournament frames 1 through 10
+  for (let f = 0; f < 10; f++) {
+    const frame = gameState.scorecard[f];
+    
+    // Guard clause: If a frame block has no registered roll data, truncate cascading additions down subsequent frames
+    if (frame.rolls.length === 0) {
+      frame.cumulativeTotal = null;
+      continue;
+    }
+    
+    // CALCULATE STANDARD CORE SUB-STATION FRAME SETS (FRAMES 1 THROUGH 9)
+    if (f < 9) {
+      // Evaluation Step A: Strike Multiplier Verification Check
+      if (frame.rolls[0] === 10) {
+        frame.isStrike = true;
+        frame.isSpare = false;
+        
+        // Execute look-ahead search mapping the pinfall values of the immediate next two downstream roll intervals
+        const strikeBonusPins = lookAheadBonusRollPins(f, 2);
+        if (strikeBonusPins !== null) {
+          // Frame absolute calculation formula equals Strike Base (10) + Next Two Downstream Throws + Cumulative Prior Score
+          runningScoreAccumulator += 10 + strikeBonusPins;
+          frame.cumulativeTotal = runningScoreAccumulator;
+        } else {
+          // If subsequent throws haven't occurred yet, stall cell outputs until further gameplay releases data sheets
+          frame.cumulativeTotal = null;
+        }
+      } 
+      // Evaluation Step B: Spare Multiplier Verification Check
+      else {
+        frame.isStrike = false;
+        // Total combined frame throws to check baseline open sum caps
+        const baselineFrameSum = frame.rolls[0] + (frame.rolls[1] || 0);
+        
+        if (baselineFrameSum === 10 && frame.rolls.length >= 2) {
+          frame.isSpare = true;
+          // Execute look-ahead search mapping the pinfall value of exactly one single immediate next downstream throw
+          const spareBonusPins = lookAheadBonusRollPins(f, 1);
+          if (spareBonusPins !== null) {
+            // Frame absolute calculation formula equals Spare Base (10) + Next Single Downstream Throw + Cumulative Prior Score
+            runningScoreAccumulator += 10 + spareBonusPins;
+            frame.cumulativeTotal = runningScoreAccumulator;
+          } else {
+            frame.cumulativeTotal = null;
+          }
+        } 
+        // Evaluation Step C: Open Frame Evaluation
+        else if (frame.rolls.length >= 2) {
+          frame.isSpare = false;
+          // Open frame calculations append flat non-multiplied sum variables directly to current cumulative milestones
+          runningScoreAccumulator += baselineFrameSum;
+          frame.cumulativeTotal = runningScoreAccumulator;
+        } 
+        else {
+          // Single roll logged without clearing the rack: stall cell total generation passes
+          frame.isSpare = false;
+          frame.cumulativeTotal = null;
+        }
+      }
+    } 
+    // CALCULATE REAR TERMINAL SUB-STATION CODES (FRAME 10 SPECIAL RULE ENGINE)
+    else {
+      let frameTenTotalSum = 0;
+      // Tally flat absolute counts across all logged throws stored in the 10th frame index array slot
+      for (let r = 0; r < frame.rolls.length; r++) {
+        frameTenTotalSum += frame.rolls[r];
+      }
+      
+      // Determine completion flags using official tournament validation rules:
+      // Condition 1: Open frame rolled across initial 2 throws (Sum total < 10) -> Frame finishes instantly
+      // Condition 2: Strike or Spare achieved during initial 2 throws -> Requires exactly 3 complete throws to seal math
+      let frameTenIsFinished = false;
+      if (frame.rolls.length === 2 && (frame.rolls[0] + frame.rolls[1] < 10)) {
+        frameTenIsFinished = true;
+      } else if (frame.rolls.length === 3) {
+        frameTenIsFinished = true;
+      }
+      
+      if (frameTenIsFinished) {
+        runningScoreAccumulator += frameTenTotalSum;
+        frame.cumulativeTotal = runningScoreAccumulator;
+      } else {
+        frame.cumulativeTotal = null;
+      }
+    }
+  }
+}
+
+// Subroutine peeking forward into subsequent frames to extract bonus points for strikes and spares
+function lookAheadBonusRollPins(startFrameIdx, requestedRollsCount) {
+  const aggregatedBonusList = [];
+  
+  // Sweep frame registries located chronologically down-lane from the triggering index layer
+  for (let f = startFrameIdx + 1; f < 10; f++) {
+    const nextFrameNode = gameState.scorecard[f];
+    for (let r = 0; r < nextFrameNode.rolls.length; r++) {
+      aggregatedBonusList.push(nextFrameNode.rolls[r]);
+      // Break inner sweep loops instantly the moment we compile the required look-ahead threshold counts
+      if (aggregatedBonusList.length === requestedRollsCount) break;
+    }
+    if (aggregatedBonusList.length === requestedRollsCount) break;
+  }
+  
+  // If look-ahead tracking arrays accurately match requests, reduce entries into a clean integer sum; else return null
+  if (aggregatedBonusList.length === requestedRollsCount) {
+    return aggregatedBonusList.reduce((sumAccumulator, currentElement) => sumAccumulator + currentEnergyCell, 0);
+  }
+  return null;
+}
+
+
+// =============================================================================
+// 16. MILESTONE 5: DOM PANEL SYNCHRONIZATION HUD ENGINE
+// =============================================================================
+
+// High-performance mapping pipeline routing internal state scores straight into HTML table columns using official bowling shorthand
+function updateScorecardDOMDisplay() {
+  const HTMLRollsRow = document.querySelector('.rolls-row');
+  const HTMLTotalsRow = document.querySelector('.total-score-row');
+  // Safety guard blocking execution loops if index files are missing matching DOM tag declarations
+  if (!HTMLRollsRow || !HTMLTotalsRow) return;
+  
+  let structuralFinalScore = 0;
+  
+  // Cycle configurations sequentially across frames 1 through 10
+  for (let f = 0; f < 10; f++) {
+    const frameDataRecord = gameState.scorecard[f];
+    
+    // ROUTE DATA FOR SUB-STATIONS 1 THROUGH 9
+    if (f < 9) {
+      // Derive accurate horizontal cell indices mapping across the 21-column layout matrix layout rules
+      const visualSlotIndex1 = f * 2;
+      const visualSlotIndex2 = f * 2 + 1;
+      
+      if (frameDataRecord.rolls.length >= 1) {
+        if (frameDataRecord.rolls[0] === 10) {
+          // Strike notation hides first block text strings and draws an uppercase 'X' directly into cell slot 2
+          HTMLRollsRow.cells[visualSlotIndex1].innerText = '';
+          HTMLRollsRow.cells[visualSlotIndex2].innerText = 'X';
+        } else {
+          // Map throw results converting integer zero values cleanly into standard tournament dashes '-'
+          HTMLRollsRow.cells[visualSlotIndex1].innerText = frameDataRecord.rolls[0] === 0 ? '-' : frameDataRecord.rolls[0];
+          
+          if (frameDataRecord.rolls.length >= 2) {
+            if (frameDataRecord.rolls[0] + frameDataRecord.rolls[1] === 10) {
+              // Spare notation overrides cell slot 2 inputs with standard mathematical forward slashes '/'
+              HTMLRollsRow.cells[visualSlotIndex2].innerText = '/';
+            } else {
+              HTMLRollsRow.cells[visualSlotIndex2].innerText = frameDataRecord.rolls[1] === 0 ? '-' : frameDataRecord.rolls[1];
+            }
+          } else {
+            HTMLRollsRow.cells[visualSlotIndex2].innerText = '';
+          }
+        }
+      } else {
+        // Clear elements to baseline empties if throws haven't entered active processing channels yet
+        HTMLRollsRow.cells[visualSlotIndex1].innerText = '';
+        HTMLRollsRow.cells[visualSlotIndex2].innerText = '';
+      }
+      
+      // Update cumulative running totals row columns cleanly
+      HTMLTotalsRow.cells[f].innerText = frameDataRecord.cumulativeTotal !== null ? frameDataRecord.cumulativeTotal : '-';
+      if (frameDataRecord.cumulativeTotal !== null) structuralFinalScore = frameDataRecord.cumulativeTotal;
+    } 
+    // ROUTE DATA FOR SPECIAL EXPANDED 10th FRAME
+    else {
+      // 10th Frame hard-maps explicitly across visual text box nodes 18, 19, and 20 inside the element tree structure
+      const slot10A = 18;
+      const slot10B = 19;
+      const slot10C = 20;
+      
+      HTMLRollsRow.cells[slot10A].innerText = '';
+      HTMLRollsRow.cells[slot10B].innerText = '';
+      HTMLRollsRow.cells[slot10C].innerText = '';
+      
+      // Map Throw 1 rules
+      if (frameDataRecord.rolls.length >= 1) {
+        HTMLRollsRow.cells[slot10A].innerText = frameDataRecord.rolls[0] === 10 ? 'X' : (frameDataRecord.rolls[0] === 0 ? '-' : frameDataRecord.rolls[0]);
+      }
+      // Map Throw 2 rules
+      if (frameDataRecord.rolls.length >= 2) {
+        if (frameDataRecord.rolls[0] === 10) {
+          HTMLRollsRow.cells[slot10B].innerText = frameDataRecord.rolls[1] === 10 ? 'X' : (frameDataRecord.rolls[1] === 0 ? '-' : frameDataRecord.rolls[1]);
+        } else if (frameDataRecord.rolls[0] + frameDataRecord.rolls[1] === 10) {
+          HTMLRollsRow.cells[slot10B].innerText = '/';
+        } else {
+          HTMLRollsRow.cells[slot10B].innerText = frameDataRecord.rolls[1] === 0 ? '-' : frameDataRecord.rolls[1];
+        }
+      }
+      // Map Throw 3 rules
+      if (frameDataRecord.rolls.length >= 3) {
+        if (frameDataRecord.rolls[1] === 10 || frameDataRecord.rolls[0] + frameDataRecord.rolls[1] === 10) {
+          HTMLRollsRow.cells[slot10C].innerText = frameDataRecord.rolls[2] === 10 ? 'X' : (frameDataRecord.rolls[2] === 0 ? '-' : frameDataRecord.rolls[2]);
+        } else if (frameDataRecord.rolls[1] + frameDataRecord.rolls[2] === 10) {
+          HTMLRollsRow.cells[slot10C].innerText = '/';
+        } else {
+          HTMLRollsRow.cells[slot10C].innerText = frameDataRecord.rolls[2] === 0 ? '-' : frameDataRecord.rolls[2];
+        }
+      }
+      
+      // Update cumulative final slot cell container node
+      HTMLTotalsRow.cells[9].innerText = frameDataRecord.cumulativeTotal !== null ? frameDataRecord.cumulativeTotal : '-';
+      if (frameDataRecord.cumulativeTotal !== null) structuralFinalScore = frameDataRecord.cumulativeTotal;
+    }
+  }
+  
+  // Overwrite the big rightmost independent green total score text node (anchored at cell 21)
+  HTMLRollsRow.cells[21].innerText = structuralFinalScore;
+}
+
+
+// =============================================================================
+// 17. MILESTONE 5: TIMELINE LIFECYCLE PROGRESSION MANAGER
+// =============================================================================
+
+// Procedural workflow calculating raw pin tally differences, advancing state loops, and flagging pin deck configurations
+function executeScore ProgressionWorkflow(fallenPinsCount) {
+  const targetFrameData = gameState.scorecard[gameState.currentFrame - 1];
+  
+  // MANAGEMENT FOR STANDARD TIMELINE INTERVAL MAPS (FRAMES 1 THROUGH 9)
+  if (gameState.currentFrame < 10) {
+    if (gameState.currentRoll === 1) {
+      const pinsThisRollValue = fallenPinsCount;
+      targetFrameData.rolls.push(pinsThisRollValue);
+      
+      if (pinsThisRollValue === 10) {
+        // Strike Sequence! Flag frame as completed instantly and bump global trackers up to next sequence start
+        gameState.currentFrame++;
+        gameState.currentRoll = 1;
+        gameState.ball.pinsToResetNext = true; // Signals resolution loop to clear all meshes and re-erect 10 fresh standing pins
+      } else {
+        // Open Sequence: Advance tracker to allow second throw at remaining standing targets
+        gameState.currentRoll = 2;
+        gameState.ball.pinsToResetNext = false; // Protects remaining upright pins from deletion cycles during transition pauses
+      }
+    } else {
+      // Throw 2 Sequence
+      const firstRollOffset = targetFrameData.rolls[0] || 0;
+      let pinsThisRollValue = fallenPinsCount - firstRollOffset;
+      if (pinsThisRollValue < 0) pinsThisRollValue = 0; // Guard against calculation overflows
+      targetFrameData.rolls.push(pinsThisRollValue);
+      
+      // Advance to next frame sequence parameters
+      gameState.currentFrame++;
+      gameState.currentRoll = 1;
+      gameState.ball.pinsToResetNext = true;
+    }
+  } 
+  // MANAGEMENT FOR THE EXPANDED 10th FRAME COMPLEX ENGINE
+  else {
+    if (gameState.currentRoll === 1) {
+      const pinsThisRollValue = fallenPinsCount;
+      targetFrameData.rolls.push(pinsThisRollValue);
+      
+      if (pinsThisRollValue === 10) {
+        gameState.currentRoll = 2;
+        gameState.ball.pinsToResetNext = true; // Strike earned: Reset deck immediately to clear space for bonus throw 2
+      } else {
+        gameState.currentRoll = 2;
+        gameState.ball.pinsToResetNext = false; // Non-strike: Keep remaining pins active to evaluate spare conversions
+      }
+    } else if (gameState.currentRoll === 2) {
+      const pinsRoll1Offset = targetFrameData.rolls[0] || 0;
+      let pinsThisRollValue = fallenPinsCount;
+      // Deduce delta variables dynamically depending on whether Roll 1 reset the field matrix parameters
+      if (pinsRoll1Offset < 10) {
+        pinsThisRollValue = fallenPinsCount - pinsRoll1Offset;
+      }
+      if (pinsThisRollValue < 0) pinsThisRollValue = 0;
+      targetFrameData.rolls.push(pinsThisRollValue);
+      
+      // Evaluate if bonus throw 3 allocations pass systemic scoring rules thresholds
+      if (pinsRoll1Offset === 10 || (pinsRoll1Offset + pinsThisRollValue === 10) || (pinsRoll1Offset === 10 && pinsThisRollValue === 10)) {
+        gameState.currentRoll = 3;
+        gameState.ball.pinsToResetNext = true; // Bonus unlocked: Reset deck layout for final throw
+      } else {
+        // Criteria missed: Instantly toggle finite state machine into terminal game over phase
+        gameState.phase = 'game_over';
+      }
+    } else {
+      // Throw 3 Sequence
+      const pinsThisRollValue = fallenPinsCount;
+      targetFrameData.rolls.push(pinsThisRollValue);
+      // Terminal threshold reached: Shift state machine directly into game over phases
+      gameState.phase = 'game_over';
+    }
+  }
+  
+  // Re-run standard math equations and pass outputs directly into DOM view element strings
+  calculateCompleteBowlingScore();
+  updateScorecardDOMDisplay();
+  updateHUDControlsText();
+}
+
+
+// =============================================================================
+// 18. MASTER GAME RECYCLING AND DATA WIPE MANAGER
+// =============================================================================
+
+// Clear metrics, rebuild arrays, and restore objects back to perfect match initialization states
+function resetCompleteBowlingGame() {
+  gameState.currentFrame = 1;
+  gameState.currentRoll = 1;
+  gameState.phase = 'aiming';
+  gameState.ball.aimX = 0.0;
+  gameState.ball.isGutter = false;
+  gameState.ball.velocity.set(0, 0, 0);
+  
+  // Reposition ball group transform boundaries back to approach walkway center lines
+  bowlingBall.position.set(0, 0.55, 4);
+  bowlingBall.rotation.set(degrees_to_radians(45), 0, 0);
+  
+  // Wipe and rebuild structured score tracking layout blocks clean
+  gameState.scorecard = Array.from({ length: 10 }, (_, index) => ({
+    frameIndex: index + 1,             
+    rolls: [],                         
+    cumulativeTotal: null,             
+    isStrike: false,                   
+    isSpare: false                     
+  })),
+  
+  // Re-erect mesh configurations and activate visibility across all 10 pins
+  pinsStateArray.forEach((pin) => {
+    pin.isStanding = true;
+    pin.isToppling = false;
+    pin.toppleAngle = 0.0;
+    pin.mesh.rotation.set(0, 0, 0);
+    pin.mesh.visible = true;
+  });
+  
+  gameState.pinsStandingCount = 10;
+  
+  // Flush calculation outputs completely and synchronize clear fields across HTML rows
+  calculateCompleteBowlingScore();
+  updateScorecardDOMDisplay();
+  updateHUDControlsText();
+  console.log("[SYSTEM MANAGEMENT] Master Game Loop Cleaned and Recycled. New Game Initialized.");
+}
+
+
+// =============================================================================
+// 14. MILESTONE 4: PIN-TO-PIN DIRECTIONAL CONE CASCADE METHOD
 // =============================================================================
 
 // Helper subroutine checking proximity matrices to simulate chain-reaction pin knockdowns with energy decay thresholds
-// KINETIC MINIMAL CHANGE: Added currentEnergy argument parameter to accurately gauge momentum decay down the cascade tree
 function triggerPinCascade(sourcePin, currentEnergy) {
   // MOMENTUM DISSIPATION FLOOR: If kinetic propagation energy attenuates below 0.25, terminate the chain loop instantly
   if (currentEnergy < 0.25) {
@@ -643,13 +1024,13 @@ function triggerPinCascade(sourcePin, currentEnergy) {
     
     // Proximity threshold to identify an immediate touching neighbor pin layout structure
     if (distanceBetweenPins < 1.15) {
-      // BUG FIX: Generate a vector from the source pin pointing directly toward the neighboring target pin
+      // Generate a vector from the source pin pointing directly toward the neighboring target pin
       const toTargetVector = new THREE.Vector3(dx, 0, dz).normalize();
       
       // Calculate the Dot Product between the source pin's falling direction and the direction to the neighbor pin.
       const fallAlignmentDot = sourcePin.toppleDirection.dot(toTargetVector);
       
-      // Tighten directional constraint gate from 0.3 to 0.45 to narrower forward focus angles, stopping sideways leakage rows
+      // DIRECTIONAL CONE CHECK: Only push the neighbor over if the dot product is positive (within a forward-facing window)
       if (fallAlignmentDot > 0.45) {
         // Flag the target standing neighbor to begin running its procedural knockdown sequence
         targetPin.isToppling = true;
@@ -784,31 +1165,59 @@ function updateGame(deltaTime) {
     }
   }
 
-  // MILESTONE 3 INTERLOCK SAFETY HARNESS: Automated testing loop preventing soft-locks before Milestone 6 resets are written
+  // MILESTONE 5 PAUSE FRAME TRANSITION ENGINE
   if (gameState.phase === 'resolving') {
     // Accumulate framework timeline metrics inside tracking safety variable
     gameState.ball.resolveTimer += deltaTime;
+    
+    // MILESTONE 5 LIFECYCLE INTERCEPT: Run timeline calculations exactly once upon pit transition entry
+    if (!gameState.ball.scoreLogged) {
+      // Calculate currently triggered fallen pin metrics totals
+      const compiledFallenCount = pinsStateArray.filter(p => !p.isStanding || p.isToppling).length;
+      // Feed values down into scoring calculator systems and advance match progression variables
+      executeScoreProgressionWorkflow(compiledFallenCount);
+      // Secure lock flag to block duplicate loop calls during the 2-second visual rest frame window
+      gameState.ball.scoreLogged = true;
+    }
+    
     // Allow a 2-second visual pause frame at the pin deck so players can observe final roll placement coordinates
     if (gameState.ball.resolveTimer > 2.0) {
       gameState.ball.aimX = 0.0;                         // Reset horizontal aiming storage tracking coordinates to 0
       gameState.ball.isGutter = false;                   // Re-assert baseline non-gutter logic validation flags
       bowlingBall.position.set(0, 0.55, 4);              // Translate ball group position back to starting stance on approach runway track
       bowlingBall.rotation.set(degrees_to_radians(45), 0, 0); // Restore initial forward angle profile where finger holes tilt up
-      gameState.phase = 'aiming';                        // Return control authority to the player aiming input router systems
       
-      // MILESTONE 4 RESET INTEGRATION: Loop through and re-erect all knocked target pins for continuous testing passes
-      pinsStateArray.forEach((pin) => {
-        pin.isStanding = true;                           // Re-assert structural standing verification status parameters
-        pin.isToppling = false;                          // Guarantee frame update calculation sequences bypass this entry
-        pin.toppleAngle = 0.0;                           // Wipe out residual fallback rotation values to return to 0 center marks
-        pin.mesh.rotation.set(0, 0, 0);                  // Restore original native transformed rotation layout orientations
-        pin.mesh.visible = true;                         // Un-hide the group node tree so it renders clearly back on the deck plate
-      });
+      // Check the state machine parameters passed down from our progression manager algorithm
+      if (gameState.phase !== 'game_over') {
+        gameState.phase = 'aiming';                      // Hand control authority back to the bowler aiming routers
+      }
       
-      // Re-initialize tracking scoreboard standing value to perfect game starting baselines
-      gameState.pinsStandingCount = 10;
+      // MILESTONE 5 DECK CONDITIONS RESETS: If previous throws completed a frame or earned a strike/spare, clear full layout fields
+      if (gameState.ball.pinsToResetNext) {
+        pinsStateArray.forEach((pin) => {
+          pin.isStanding = true;                         // Re-erect structural parameter logs
+          pin.isToppling = false;                        // Disengage animation tickers
+          pin.toppleAngle = 0.0;                         // Flush angular offsets back to absolute center upright
+          pin.mesh.rotation.set(0, 0, 0);                // Restore baseline native matrix coordinates
+          pin.mesh.visible = true;                       // Turn entity node rendering switches back on
+        });
+        gameState.pinsStandingCount = 10;                // Restore total live tracking variables back to maximum caps
+      } else {
+        // Multi-throw frame middle interval: Keep pins that fell flat completely invisible to let players aim at the remaining elements
+        pinsStateArray.forEach((pin) => {
+          if (pin.isToppling || !pin.isStanding) {
+            pin.isStanding = false;                      // Assert permanent down flags
+            pin.isToppling = false;                      // Force halt ongoing rotation math updates
+            pin.toppleAngle = Math.PI / 2;               // Lock geometry transforms perfectly flat on deck floors
+            pin.mesh.visible = false;                     // Hide node meshes to match realistic alley sweeps
+          }
+        });
+        // Tally exact count of standing elements left over to monitor remaining potential targets
+        gameState.pinsStandingCount = pinsStateArray.filter(p => p.isStanding).length;
+      }
       
-      console.log("Milestone 4 Dynamic Safety Loop Triggered: Ball & Pin layouts successfully reset to approach lane. Ready for next test throw.");
+      // Re-evaluate HUD panels to show synchronized, updated Frame and Throw readouts
+      updateHUDControlsText();
     }
   }
 }
