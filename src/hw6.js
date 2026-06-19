@@ -5,7 +5,7 @@
 import { OrbitControls } from './OrbitControls.js';
 
 // ============================================================================
-// 1. CORE WEBGL GLOBAL CONTEXT INITIALIZATION
+// CORE WEBGL GLOBAL CONTEXT INITIALIZATION
 // ============================================================================
 
 // Instantiate the master scene container to manage the 3D entity graph hierarchy
@@ -28,7 +28,7 @@ scene.background = new THREE.Color(0x1a1a2e);
 
 
 // ============================================================================
-// 2. SYSTEM ILLUMINATION LOGIC & DYNAMIC DEPTH SHADOW MAP LAYOUTS
+// SYSTEM ILLUMINATION LOGIC & DYNAMIC DEPTH SHADOW MAP LAYOUTS
 // ============================================================================
 
 // Setup non-directional light source to establish global base ambient exposure fill metrics
@@ -59,7 +59,7 @@ directionalLight.castShadow = true;
 
 
 // ============================================================================
-// 3. MATHEMATICAL COORDINATE SYSTEM UTILITIES
+// MATHEMATICAL COORDINATE SYSTEM UTILITIES
 // ============================================================================
 
 // Transform standard human-readable degrees into Cartesian radian values required by raw Three.js rotation vectors
@@ -71,7 +71,7 @@ function degrees_to_radians(degrees) {
 
 
 // ============================================================================
-// 4. MASTER ALLEY INFRASTRUCTURE CREATION FUNCTION
+// MASTER ALLEY INFRASTRUCTURE CREATION FUNCTION
 // ============================================================================
 function createBowlingLane() {
   
@@ -215,7 +215,7 @@ createBowlingLane();
 
 
 // ============================================================================
-// 5. PROCEDURAL PIN ASSEMBLY & TRIANGULAR DEPLOYMENT
+// PROCEDURAL PIN ASSEMBLY & TRIANGULAR DEPLOYMENT
 // ============================================================================
 
 // Component factory scripting processing stacked primitive geometries to construct a unified regulation pin model group
@@ -337,7 +337,7 @@ deployPinFormation();
 
 
 // ============================================================================
-// 6. STATIC HIGH-POLISH POLYGON BOWLING BALL
+// STATIC HIGH-POLISH POLYGON BOWLING BALL
 // ============================================================================
 
 // Declare global reference pointer variable tracking primary ball object for operational manipulation
@@ -409,7 +409,7 @@ createStaticBowlingBall();
 
 
 // ============================================================================
-// 7. CAMERA DESKTOP ORIENTATION VANTAGE STANDPOINT CONFIGURATION
+// CAMERA DESKTOP ORIENTATION VANTAGE STANDPOINT CONFIGURATION
 // ============================================================================
 
 // Initialize empty transformation identity matrix block tracking camera spatial coordinate displacements
@@ -421,7 +421,7 @@ camera.applyMatrix4(cameraTranslate);
 
 
 // ============================================================================
-// 8. INTERACTIVE DESKTOP CONSOLE RECEPTION ACTION INTERACTION CODE
+// INTERACTIVE DESKTOP CONSOLE RECEPTION ACTION INTERACTION CODE
 // ============================================================================
 
 // Bind raw camera transformations to OrbitControls monitoring mouse drag coordinates across graphics viewport drawing window canvas
@@ -535,7 +535,7 @@ document.addEventListener('keydown', handleKeyDown);
 
 
 // ============================================================================
-// 9. VIEWPORT RESOLUTION DYNAMIC RESPONSIVENESS MODULE
+// VIEWPORT RESOLUTION DYNAMIC RESPONSIVENESS MODULE
 // ============================================================================
 
 // Adaptive callback recalculating aspect ratios and matching vector shapes when viewport screens get resized or deformed
@@ -553,7 +553,7 @@ window.addEventListener('resize', onWindowResize, false);
 
 
 // =============================================================================
-// 10. HW06 GLOBAL GAME STATE MACHINE ARCHITECTURE 
+// GAME STATE MACHINE 
 // =============================================================================
 
 // Object model organizing game metadata records, tracking array matrices, scorecard registries, and state flags
@@ -587,7 +587,7 @@ const gameState = {
 
 
 // =============================================================================
-// 11. HW06 UI: PANEL HUD MANIPULATORS & DYNAMIC POWER GAUGE OVERLAYS
+// PANEL HUD MANIPULATORS & DYNAMIC POWER GAUGE OVERLAYS
 // =============================================================================
 
 // Target default controls guide element box injected from HTML script headers
@@ -664,7 +664,7 @@ function calculateCompleteBowlingScore() {
     
     // CALCULATE STANDARD CORE SUB-STATION FRAME SETS (FRAMES 1 THROUGH 9)
     if (f < 9) {
-      // Evaluation Step A: Strike Multiplier Verification Check
+      // Evaluation: Strike Multiplier Verification Check
       if (frame.rolls[0] === 10) {
         frame.isStrike = true;
         frame.isSpare = false;
@@ -680,7 +680,7 @@ function calculateCompleteBowlingScore() {
           frame.cumulativeTotal = null;
         }
       } 
-      // Evaluation Step B: Spare Multiplier Verification Check
+      // Evaluation: Spare Multiplier Verification Check
       else {
         frame.isStrike = false;
         // Total combined frame throws to check baseline open sum caps
@@ -698,7 +698,7 @@ function calculateCompleteBowlingScore() {
             frame.cumulativeTotal = null;
           }
         } 
-        // Evaluation Step C: Open Frame Evaluation
+        // Evaluation: Open Frame Evaluation
         else if (frame.rolls.length >= 2) {
           frame.isSpare = false;
           // Open frame calculations append flat non-multiplied sum variables directly to current cumulative
@@ -948,7 +948,7 @@ function executeScoreProgressionWorkflow(fallenPinsCount) {
 
 
 // =============================================================================
-// 18. MASTER GAME RECYCLING AND DATA WIPE MANAGER
+// MASTER GAME RECYCLING AND DATA WIPE MANAGER
 // =============================================================================
 
 // Clear metrics, rebuild arrays, and restore objects back to perfect match initialization states
@@ -1050,7 +1050,7 @@ function triggerPinCascade(sourcePin, currentEnergy) {
 
 
 // =============================================================================
-// 12. HW06 MASTER PHYSICS ENTRY & STATE RESOLUTION LOOPS
+// MASTER PHYSICS ENTRY & STATE RESOLUTION LOOPS
 // =============================================================================
 
 // Unified update controller parsing elapsed framerate timings to update positions and structural checks
@@ -1219,7 +1219,7 @@ function updateGame(deltaTime) {
 
 
 // =============================================================================
-// 13. MASTER RENDERING & SYSTEM ANIMATION LOOP
+// MASTER RENDERING & SYSTEM ANIMATION LOOP
 // =============================================================================
 
 // Initialize internal Three.js high-resolution timestamp clock tracker to record performance intervals accurately
