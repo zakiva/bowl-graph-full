@@ -3,7 +3,7 @@
 // MILESTONE 1: STRUCTURAL SETUP & STATE MACHINE ARCHITECTURE
 // MILESTONE 2: INPUT HANDLING & DYNAMIC POWER METER UI
 // MILESTONE 3: ANALYTICAL BALL PHYSICS & GUTTER DETECTION (BONUS STRIPPED)
-// MILESTONE 4: COLLISION DETECTION & PROCEDURAL PIN TOPPLING (CASCADE BUG FIXED)
+// MILESTONE 4: COLLISION DETECTION & PROCEDURAL PIN TOPPLING (KINETIC DECAY FIX)
 // =============================================================================
 
 import { OrbitControls } from './OrbitControls.js';
@@ -467,7 +467,7 @@ function handleKeyDown(e) {
   if (gameState.phase === 'aiming') {
     // Determine strict scaling modifier to dictate movement distance per active keystroke tap
     const movementStep = 0.1;
-    // Calculate physical clamping boundary. Lane width is 3.5, half is 1.75. We clamp to 1.3 to avoid early gutter clips.
+    // Calculate physical clamping boundary. Lane width is 3.5, half is 1.75. We clamp to 2.0 to test straight gutter rolls.
     const maxEdgeLimit = 2;
 
     if (e.key === 'ArrowLeft') {
@@ -514,10 +514,6 @@ function handleKeyDown(e) {
       // Value is negative because the lane extends into negative Z-coordinate space.
       gameState.ball.velocity.set(0, 0, -launchSpeed);
     }
-  }
-  
-  if (e.key === 'r' || e.key === 'R') {
-    // Handled in Milestone 6: Execute master reset routine restoring game state records to baseline values
   }
 }
 
@@ -620,11 +616,17 @@ document.body.appendChild(powerMeterContainer);
 
 
 // =============================================================================
-// 14. MILESTONE 4: PIN-TO-PIN DIRECTIONAL CONE CASCADE METHOD (BUG FIXED)
+// 14. MILESTONE 4: PIN-TO-PIN CASCADE METHOD WITH KINETIC ENERGY DAMPENING
 // =============================================================================
 
-// Helper subroutine checking proximity matrices to simulate chain-reaction pin knockdowns
-function triggerPinCascade(sourcePin) {
+// Helper subroutine checking proximity matrices to simulate chain-reaction pin knockdowns with energy decay thresholds
+// KINETIC MINIMAL CHANGE: Added currentEnergy argument parameter to accurately gauge momentum decay down the cascade tree
+function triggerPinCascade(sourcePin, currentEnergy) {
+  // MOMENTUM DISSIPATION FLOOR: If kinetic propagation energy attenuates below 0.25, terminate the chain loop instantly
+  if (currentEnergy < 0.25) {
+    return;
+  }
+
   // Run an analytical loop across all pin structures in our master state registry
   pinsStateArray.forEach((targetPin) => {
     // Skip checking if evaluating the source pin itself, or if target pin is already falling/down
@@ -645,12 +647,10 @@ function triggerPinCascade(sourcePin) {
       const toTargetVector = new THREE.Vector3(dx, 0, dz).normalize();
       
       // Calculate the Dot Product between the source pin's falling direction and the direction to the neighbor pin.
-      // This tells us if the source pin is actively falling *towards* or *away* from its neighbor.
       const fallAlignmentDot = sourcePin.toppleDirection.dot(toTargetVector);
       
-      // Strict directional constraint gate: Only push the neighbor over if the dot product is positive (within a 120-degree forward cone).
-      // If a pin falls backwards or completely sideways away from a neighbor, it will cleanly miss it!
-      if (fallAlignmentDot > 0.3) {
+      // Tighten directional constraint gate from 0.3 to 0.45 to narrower forward focus angles, stopping sideways leakage rows
+      if (fallAlignmentDot > 0.45) {
         // Flag the target standing neighbor to begin running its procedural knockdown sequence
         targetPin.isToppling = true;
         
@@ -665,8 +665,8 @@ function triggerPinCascade(sourcePin) {
         // Save the finalized direction vector straight into the neighbor pin object state dictionary tracking entry
         targetPin.toppleDirection.copy(combinedToppleDir);
         
-        // Recurse operations cleanly down the tree graph to drop further adjacent forward neighbors caught in the crash path
-        triggerPinCascade(targetPin);
+        // MOMENTUM ATTENUATOR REFRACTOR: Recurse cascade downwards while scaling current energy coefficient down by a dampening factor of 0.45
+        triggerPinCascade(targetPin, currentEnergy * 0.45);
       }
     }
   });
@@ -761,8 +761,8 @@ function updateGame(deltaTime) {
           // Copy finalized trajectory metrics inside pin tracking memory state fields
           pin.toppleDirection.copy(dynamicPushDir);
           
-          // Execute the cascade propagation function subroutine to knock over adjacent neighbors caught in the crash zone
-          triggerPinCascade(pin);
+          // BALL HIT INTEGRATION: Fire downstream chain cascade while passing the initial base maximum energy coefficient value of 1.0
+          triggerPinCascade(pin, 1.0);
         }
       });
     }
