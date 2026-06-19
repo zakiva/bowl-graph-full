@@ -1,6 +1,7 @@
 // =============================================================================
 // Computer Graphics - Exercise 6 - Interactive Bowling Game
 // MILESTONE 1: STRUCTURAL SETUP & STATE MACHINE ARCHITECTURE
+// MILESTONE 2: INPUT HANDLING & DYNAMIC POWER METER UI
 // =============================================================================
 
 import { OrbitControls } from './OrbitControls.js';
@@ -283,10 +284,10 @@ function createBowlingPin() {
   return pinGroup;
 }
 
-// MILESTONE 1 REFRACTOR: Master global array structure tracking 3D mesh instances and state tracking indices for pins
+// Master global array structure tracking 3D mesh instances and state tracking indices for pins
 let pinsStateArray = [];
 
-// REFACTOR DEPLOYMENT ENGINE: Generates and registers structural pins while binding entries into the tracking state matrix
+// Generates and registers structural pins while binding entries into the tracking state matrix
 function deployPinFormation() {
   // Clear any existing residual meshes from previous operations out of the master system tracking index array
   pinsStateArray = [];
@@ -319,7 +320,7 @@ function deployPinFormation() {
     // Mount compiled transformed individual pin group structure into main viewable rendering scene node tree
     scene.add(pinInstance);
     
-    // MILESTONE 1 INTEGRATION: Push active structural state tracking objects into global tracking array
+    // Push active structural state tracking objects into global tracking array
     pinsStateArray.push({
       id: pos.id,                        // Unique integer ID key corresponding with tournament layouts (1-10)
       mesh: pinInstance,                 // Live reference pointer tracking the actual 3D object inside Three.js graph
@@ -341,7 +342,7 @@ deployPinFormation();
 // 6. STATIC HIGH-POLISH POLYGON BOWLING BALL
 // ============================================================================
 
-// MILESTONE 1 ARCHITECTURE: Declare global reference pointer variable tracking primary ball object for operational manipulation
+// Declare global reference pointer variable tracking primary ball object for operational manipulation
 let bowlingBall;
 
 function createStaticBowlingBall() {
@@ -398,7 +399,7 @@ function createStaticBowlingBall() {
   // Tilt full group 45 degrees forward around X axis so all 3 structural finger holes face upward towards default view perspective
   ballGroup.rotation.x = degrees_to_radians(45);
   
-  // MILESTONE 1 BINDING: Save parent transformation bundle address directly into the global tracking pointer variable
+  // Save parent transformation bundle address directly into the global tracking pointer variable
   bowlingBall = ballGroup;
   
   // Commit fully integrated composite ball group system mesh architecture straight into master active render graph tree index
@@ -460,19 +461,62 @@ function handleKeyDown(e) {
     controls.update();
   }
 
-  // MILESTONE 1 CONTROL ROUTER GATEWAYS: Interface routes keystroke signals into matching state machine hooks
-  // Detailed operations (Aiming adjustments, spacebar velocity triggers, and complete restarts) get fully coded under subsequent milestones
+  // MILESTONE 2: BALL POSITIONING & AIMING SUBSYSTEM
+  // Verify system phase permits horizontal translation input adjustments
   if (gameState.phase === 'aiming') {
+    // Determine strict scaling modifier to dictate movement distance per active keystroke tap
+    const movementStep = 0.1;
+    // Calculate physical clamping boundary. Lane width is 3.5, half is 1.75. 
+    // We restrict the ball origin to 1.3 to guarantee the 0.45 radius sphere never clips over the gutter edge before release.
+    const maxEdgeLimit = 1.3;
+
     if (e.key === 'ArrowLeft') {
-      // Handled in Milestone 2: Move ball leftwards across approach foul line
+      // Subtract translation step from global state aiming tracker to drift ball towards negative X (left)
+      gameState.ball.aimX -= movementStep;
+      // Evaluate if updated position violates left boundary hard limit, and clamp directly to threshold if true
+      if (gameState.ball.aimX < -maxEdgeLimit) gameState.ball.aimX = -maxEdgeLimit;
+      // Pipe confirmed coordinate math directly into the live bowling ball group mesh X position offset vector
+      bowlingBall.position.x = gameState.ball.aimX;
     }
+    
     if (e.key === 'ArrowRight') {
-      // Handled in Milestone 2: Move ball rightwards across approach foul line
+      // Add translation step to global state aiming tracker to drift ball towards positive X (right)
+      gameState.ball.aimX += movementStep;
+      // Evaluate if updated position violates right boundary hard limit, and clamp directly to threshold if true
+      if (gameState.ball.aimX > maxEdgeLimit) gameState.ball.aimX = maxEdgeLimit;
+      // Pipe confirmed coordinate math directly into the live bowling ball group mesh X position offset vector
+      bowlingBall.position.x = gameState.ball.aimX;
     }
   }
   
+  // MILESTONE 2: SPACEBAR TIMING & LAUNCH INTERFACE ROUTER
   if (e.key === ' ') {
-    // Handled in Milestone 2: Toggle state mechanics (Aiming -> Power oscillation -> Rolling launch release)
+    // Gateway 1: Transition from setup aiming phase into active power charging oscillation cycle
+    if (gameState.phase === 'aiming') {
+      // Lock X coordinate offset and update global phase string flag
+      gameState.phase = 'power';
+      // Un-hide the HTML power gauge DOM interface element to provide visual charging feedback to the user
+      powerMeterContainer.style.display = 'block';
+      // Reset the internal timing accumulator to guarantee the oscillation sine wave starts at a predictable 0 origin
+      gameState.ball.powerOscillationTime = 0;
+    } 
+    // Gateway 2: Freeze power charging oscillation cycle, calculate velocity vectors, and release the ball
+    else if (gameState.phase === 'power') {
+      // Lock current power scale multiplier and advance system phase into kinematic evaluation loops
+      gameState.phase = 'rolling';
+      // Hide the power gauge DOM interface element now that charging input is frozen and complete
+      powerMeterContainer.style.display = 'none';
+      
+      // Calculate derived launch velocity. Base minimum throw speed is 15. Absolute maximum theoretical speed is 45.
+      // We scale the difference (30) by our 0.0-1.0 locked power fraction, and add it to the base minimum.
+      const launchSpeed = 15 + (30 * gameState.ball.powerScale);
+      
+      // Assign the computed scalar velocity straight into the Z-axis of our master tracking velocity Vector3.
+      // Value is negative because the lane extends into negative Z-coordinate space.
+      gameState.ball.velocity.set(0, 0, -launchSpeed);
+      
+      // The kinematic `updateGame` physics loop will now automatically capture this vector and begin translating the ball mesh down-lane.
+    }
   }
   
   if (e.key === 'r' || e.key === 'R') {
@@ -503,51 +547,43 @@ window.addEventListener('resize', onWindowResize, false);
 
 
 // =============================================================================
-// 10. HW06 GLOBAL GAME STATE MACHINE ARCHITECTURE (MILESTONE 1 MANDATE)
+// 10. HW06 GLOBAL GAME STATE MACHINE ARCHITECTURE 
 // =============================================================================
 
 // Object model organizing game metadata records, tracking array matrices, scorecard registries, and state flags
 const gameState = {
-  // Tracks operational progression indexes of the active game frame loop sequence (1 to 10 regulation frames)
   currentFrame: 1,
-  
-  // Tracks active ball throw sequence counts inside current frame sequence limits (Roll 1 or Roll 2; extends to Roll 3 on 10th frame)
   currentRoll: 1,
-  
-  // Enumerable string flag managing input routers and processing logic gates across structural lifecycle phases
-  // States: 'aiming' (setup position) | 'power' (charge launch vector) | 'rolling' (kinematic simulation) | 'resolving' (scoring/cleanup) | 'game_over'
   phase: 'aiming',
   
-  // Parameters managing positional transformations, speeds, and forces affecting the active ball mesh element
   ball: {
     aimX: 0.0,                         // Current horizontal offset positioning of ball along the foul line channel
     spinHook: 0.0,                     // Variable saving calculated side acceleration modifiers to derive curvature arc paths
-    powerScale: 0.0,                   // Scalar tracing power charge metrics from timing bar gauge inputs (0.0 to 1.0 caps)
+    powerScale: 0.0,                   // MILESTONE 2: Scalar tracing power charge metrics from timing bar gauge inputs (0.0 to 1.0 caps)
+    powerOscillationTime: 0.0,         // MILESTONE 2: Timing accumulator tracking elapsed seconds specifically for the sine wave power calculation
     velocity: new THREE.Vector3(0,0,0) // Physical 3D velocity vector managing displacement integration loops inside frame cycles
   },
   
-  // Structural data grid array organizing thrown score pinfalls, strike markers, and spare tracking flags across all 10 frames
   scorecard: Array.from({ length: 10 }, (_, index) => ({
-    frameIndex: index + 1,             // Corresponding integer identity label mapping frames 1 through 10
-    rolls: [],                         // Array logging individual pin counts knocked down on explicit throws inside this frame
-    cumulativeTotal: null,             // Running aggregate score sum tallied and rendered into user view windows
-    isStrike: false,                   // Multiplier checking flag recording if all ten pins fell on the initial roll
-    isSpare: false                     // Multiplier checking flag recording if remaining pin setups fell across throw sequence 2
+    frameIndex: index + 1,             
+    rolls: [],                         
+    cumulativeTotal: null,             
+    isStrike: false,                   
+    isSpare: false                     
   })),
   
-  // Integer keeping active tabs on total count of standing pins still remaining upright on the deck plate
   pinsStandingCount: 10
 };
 
 
 // =============================================================================
-// 11. HW06 UI: EXTENDING CONTROLS PANEL OVERLAYS
+// 11. HW06 UI: EXTENDING CONTROLS PANEL & DYNAMIC POWER METER OVERLAYS
 // =============================================================================
 
 // Target default controls guide element box injected from HTML script headers
 const instructionsElement = document.getElementById('controls-container');
 
-// MILESTONE 1 ENHANCEMENT: Re-write inner text block inside tracking container to clearly outline interactive bowling shortcuts
+// Re-write inner text block inside tracking container to clearly outline interactive bowling shortcuts
 if (instructionsElement) {
   instructionsElement.innerHTML = `
     <h3>Alley & Game Controls</h3>
@@ -561,6 +597,47 @@ if (instructionsElement) {
   `;
 }
 
+// MILESTONE 2: DYNAMIC POWER METER UI INJECTION
+// We build a completely custom DOM interface wrapper element using raw JavaScript to host the charging gauge graphic
+const powerMeterContainer = document.createElement('div');
+// Disconnect flow layout restrictions and absolute position it independently above the rendering canvas
+powerMeterContainer.style.position = 'absolute';
+// Anchor container 50px up from the absolute bottom edge of the user viewport window
+powerMeterContainer.style.bottom = '50px';
+// Align to exact center of the horizontal X-axis and slide it left by -50% of its own width for perfect visual centering
+powerMeterContainer.style.left = '50%';
+powerMeterContainer.style.transform = 'translateX(-50%)';
+// Establish rigid geometric bounding width tracking 300 pixels
+powerMeterContainer.style.width = '300px';
+// Set vertical thickness to 25 pixels
+powerMeterContainer.style.height = '25px';
+// Lay down a semi-transparent dark synthetic background track to contrast the bright moving gauge bar
+powerMeterContainer.style.background = 'rgba(20, 24, 42, 0.8)';
+// Carve a 2-pixel pure white border rim encapsulating the entire gauge component
+powerMeterContainer.style.border = '2px solid white';
+// Soften geometric sharp corners to match standard modern application HUD design guidelines
+powerMeterContainer.style.borderRadius = '12px';
+// Hide element completely from rendering pipelines until the user explicitly transitions into the 'power' state phase
+powerMeterContainer.style.display = 'none';
+// Prevent any overlapping elements from overflowing outside the border radius curve constraints
+powerMeterContainer.style.overflow = 'hidden';
+
+// Build the internal dynamic fill bar DOM element responsible for visualizing the rapidly changing power fraction math
+const powerMeterFill = document.createElement('div');
+// Lock vertical height scaling to fully consume the parent container 25px space allocation
+powerMeterFill.style.height = '100%';
+// Initialize bar width starting completely empty at 0%
+powerMeterFill.style.width = '0%';
+// Assign baseline vivid emerald green hex color to signify safe low-power throwing thresholds
+powerMeterFill.style.background = '#2ecc71';
+// Strip all CSS timing transition delays to guarantee 1:1 real-time visual syncing with the 60FPS Javascript game loop
+powerMeterFill.style.transition = 'none';
+
+// Mount inner fill bar DOM node securely inside outer container framework node
+powerMeterContainer.appendChild(powerMeterFill);
+// Mount fully compiled container gauge group directly into the live HTML document body structure layout
+document.body.appendChild(powerMeterContainer);
+
 
 // =============================================================================
 // 12. HW06 MASTER PHYSICS ENTRY & STATE RESOLUTION LOOPS
@@ -568,7 +645,35 @@ if (instructionsElement) {
 
 // Unified update controller parsing elapsed framerate timings to update positions and structural checks
 function updateGame(deltaTime) {
-  // Guard clause blocking real-time calculation sweeps if phase properties match static non-rolling state rules
+  
+  // MILESTONE 2: OSCILLATING POWER CHARGE TIMING LOOP
+  // Intercept the game loop precisely when the state machine registers an active charging cycle phase
+  if (gameState.phase === 'power') {
+    // Accumulate hardware delta time fractions into our dedicated tracking variable. 
+    // Multiply by a speed coefficient modifier (e.g. 4) to force the oscillation to cycle much faster.
+    gameState.ball.powerOscillationTime += deltaTime * 4.0;
+    
+    // Utilize a mathematical Sine wave function to produce continuous smooth oscillating waves between -1.0 and 1.0.
+    // By adding 1.0 to the result (shifts to 0.0 -> 2.0) and dividing by 2, we safely map the output to a strict 0.0 -> 1.0 fractional decimal limit.
+    gameState.ball.powerScale = (Math.sin(gameState.ball.powerOscillationTime) + 1.0) / 2.0;
+    
+    // Convert the 0.0 -> 1.0 fractional scalar directly into a CSS percentage string mapping (0% to 100%) to resize the physical UI bar
+    powerMeterFill.style.width = `${gameState.ball.powerScale * 100}%`;
+    
+    // Dynamically update the color of the UI gauge based on the current threshold tier to provide clear user feedback limits
+    if (gameState.ball.powerScale < 0.33) {
+      // Lower third bounds assigned a safe emerald green color token mapping
+      powerMeterFill.style.background = '#2ecc71';
+    } else if (gameState.ball.powerScale < 0.66) {
+      // Middle third bounds transition to a warning sunflower yellow tint identifier
+      powerMeterFill.style.background = '#f1c40f';
+    } else {
+      // Upper third maximum threshold tier locked to a dangerous deep crimson red hue profile
+      powerMeterFill.style.background = '#e74c3c';
+    }
+  }
+
+  // Guard clause blocking kinematic spatial calculation sweeps if phase properties match static non-rolling state rules
   if (gameState.phase !== 'rolling' && gameState.phase !== 'resolving') {
     return;
   }
@@ -599,8 +704,9 @@ function animate() {
   // Pipe delta execution timings down into physics managers to keep calculations completely standard across separate hardware systems
   updateGame(deltaTime);
 
-  // Manage orbit interaction capability tracking blocks based on toggle settings overrides
-  controls.enabled = isOrbitEnabled;
+  // Manage orbit interaction capability tracking blocks based on toggle settings overrides.
+  // MILESTONE 2: We enforce a rule to strictly disable OrbitControls while the ball is rolling down the lane to prevent perspective interference.
+  controls.enabled = isOrbitEnabled && (gameState.phase !== 'rolling');
   
   // Process tracking matrices inside controls module to update camera perspective adjustments safely
   controls.update();
