@@ -2,7 +2,7 @@
 // Computer Graphics - Exercise 6 - Interactive Bowling Game
 // MILESTONE 1: STRUCTURAL SETUP & STATE MACHINE ARCHITECTURE
 // MILESTONE 2: INPUT HANDLING & DYNAMIC POWER METER UI
-// MILESTONE 3: ANALYTICAL BALL PHYSICS & GUTTER DETECTION
+// MILESTONE 3: ANALYTICAL BALL PHYSICS & GUTTER DETECTION (BONUS STRIPPED)
 // =============================================================================
 
 import { OrbitControls } from './OrbitControls.js';
@@ -486,21 +486,8 @@ function handleKeyDown(e) {
       // Pipe confirmed coordinate math directly into the live bowling ball group mesh X position offset vector
       bowlingBall.position.x = gameState.ball.aimX;
     }
-
-    // MILESTONE 3: ADDING INTERACTIVE SPIN ADJUSTMENT HOOKS
-    if (e.key === 'ArrowUp') {
-      // Increase the hook vector coefficient to introduce a positive curve drift acceleration (curves rightward)
-      gameState.ball.spinHook += 0.5;
-      // Log to console so bowler can evaluate raw numerical curve vectors applied before launch
-      console.log(`Spin Vector Increased: ${gameState.ball.spinHook}`);
-    }
-
-    if (e.key === 'ArrowDown') {
-      // Decrease the hook vector coefficient to introduce a negative curve drift acceleration (curves leftward)
-      gameState.ball.spinHook -= 0.5;
-      // Log to console so bowler can evaluate raw numerical curve vectors applied before launch
-      console.log(`Spin Vector Decreased: ${gameState.ball.spinHook}`);
-    }
+    
+    // NOTE: Up and Down arrow hook keys are omitted here as they belong to the stripped bonus criteria.
   }
   
   // SPACEBAR TIMING & LAUNCH INTERFACE ROUTER
@@ -569,7 +556,6 @@ const gameState = {
   
   ball: {
     aimX: 0.0,                         // Current horizontal offset positioning of ball along the foul line channel
-    spinHook: 0.0,                     // MILESTONE 3: Active curve force factor applied iteratively to horizontal drift
     isGutter: false,                   // MILESTONE 3: Boolean state tracking if ball has breached lane boundaries into channels
     resolveTimer: 0.0,                 // MILESTONE 3: Simple frame accumulator used to handle automated temporary testing resets
     powerScale: 0.0,                   // Scalar tracing power charge metrics from timing bar gauge inputs (0.0 to 1.0 caps)
@@ -604,7 +590,6 @@ if (instructionsElement) {
     <p><span class="key-badge">Mouse Click + Drag</span> Rotate Camera View</p>
     <p><span class="key-badge">Scroll Wheel</span> Zoom View In/Out</p>
     <p><span class="key-badge">Left / Right Arrow</span> Aim / Move Ball Position</p>
-    <p><span class="key-badge">Up / Down Arrow</span> Adjust Hook / Spin Curve Vector</p>
     <p><span class="key-badge">Spacebar</span> Start Gauge / Lock Power & Release</p>
     <p><span class="key-badge">R</span> Reset Simulation / New Game</p>
     <p><span class="key-badge">V</span> Toggle Bowler vs Pin-End Vantage Views</p>
@@ -664,30 +649,26 @@ function updateGame(deltaTime) {
   // MILESTONE 3: KINEMATIC INTEGRATION ENGINE & DETECTORS
   if (gameState.phase === 'rolling') {
     
-    // 1. Hook/Curve Dynamics Physics: Evaluate if ball is traveling down clean wood lanes rather than drainage gutters
-    if (!gameState.ball.isGutter) {
-      // Apply constant lateral acceleration driven by spin hook inputs to alter horizontal velocity components over elapsed time frames
-      gameState.ball.velocity.x += gameState.ball.spinHook * deltaTime;
-    }
-
-    // 2. Analytical Euler Integration: Advance 3D positions sequentially derived from active velocity vector capacities
+    // 1. Analytical Euler Integration: Advance 3D positions sequentially derived from active velocity vector capacities.
+    // The horizontal velocity (velocity.x) remains a constant 0 because we stripped out the bonus sideways hook forces.
     bowlingBall.position.x += gameState.ball.velocity.x * deltaTime; // Displace position along the horizontal width track
     bowlingBall.position.z += gameState.ball.velocity.z * deltaTime; // Displace position along the forward depth track towards the pit
 
-    // 3. Procedural Rotation Modeling: Calculate continuous visual rotation matching circumstantial wheel roll physics speeds
-    // Linear velocity equals angular velocity multiplied by radius ($V = \omega \cdot R$). Therefore $\omega = V / R$. Bounding radius = 0.45.
+    // 2. Procedural Rotation Modeling: Calculate continuous visual rotation matching circumstantial wheel roll physics speeds
+    // Linear velocity equals angular velocity multiplied by radius (V = omega * R). Therefore omega = V / R. Bounding radius = 0.45.
     const forwardLinearSpeed = Math.abs(gameState.ball.velocity.z); // Extract absolute velocity component traversing down-lane
     bowlingBall.rotation.x += (forwardLinearSpeed / 0.45) * deltaTime; // Increment angular displacement around local X axis to simulate true roll traction
 
-    // 4. Boundary Gutter Ball Detection: Evaluate if ball horizontal extent crosses past physical lane limits (|x| > 1.75 wide)
+    // 3. Boundary Gutter Ball Detection: Evaluate if ball horizontal extent crosses past physical lane limits (|x| > 1.75 wide)
+    // If you aim the ball near the edge, it will roll straight down and clip the gutter line cleanly.
     if (!gameState.ball.isGutter && Math.abs(bowlingBall.position.x) > 1.75) {
       gameState.ball.isGutter = true;                    // Flip systemic evaluation status flag to enforce gutter tracking rules
       bowlingBall.position.y = -0.05;                    // Depress ball altitude down flush into the physical drop channel floor plane
-      gameState.ball.velocity.x = 0;                     // Wipe out all lateral velocity components immediately so the ball slides purely straight down the gutter
+      gameState.ball.velocity.x = 0;                     // Wipe out any minor lateral velocity components immediately so the ball slides straight down the gutter
       console.log("Gutter Ball Detected! Ball dropped into side channel floor tracking tracks.");
     }
 
-    // 5. Pit Terminal Boundary Detection: Identify when rolling sphere reaches the absolute end limits of the pin layout zone
+    // 4. Pit Terminal Boundary Detection: Identify when rolling sphere reaches the absolute end limits of the pin layout zone
     if (bowlingBall.position.z <= -60.0) {
       gameState.ball.velocity.set(0, 0, 0);              // Freeze all structural velocity components to bring the ball mesh to a dead halt in the pit
       gameState.phase = 'resolving';                     // Advance global state machine phase string flag to transition into resolution pipelines
@@ -703,7 +684,6 @@ function updateGame(deltaTime) {
     // Allow a 2-second visual pause frame at the pin deck so players can observe final roll placement coordinates
     if (gameState.ball.resolveTimer > 2.0) {
       gameState.ball.aimX = 0.0;                         // Reset horizontal aiming storage tracking coordinates to 0
-      gameState.ball.spinHook = 0.0;                     // Purge active hook vectors to reset ball drift variables to baseline
       gameState.ball.isGutter = false;                   // Re-assert baseline non-gutter logic validation flags
       bowlingBall.position.set(0, 0.55, 4);              // Translate ball group position back to starting stance on approach runway track
       bowlingBall.rotation.set(degrees_to_radians(45), 0, 0); // Restore initial forward angle profile where finger holes tilt up
