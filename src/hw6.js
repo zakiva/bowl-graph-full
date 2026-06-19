@@ -1100,15 +1100,15 @@ function updateGame(deltaTime) {
   // KINEMATIC INTEGRATION ENGINE & DETECTORS
   if (gameState.phase === 'rolling') {
     
-    // 1. Analytical Euler Integration: Advance 3D positions sequentially derived from active velocity vector capacities.
+    // Analytical Euler Integration: Advance 3D positions sequentially derived from active velocity vector capacities.
     bowlingBall.position.x += gameState.ball.velocity.x * deltaTime; // Displace position along the horizontal width track
     bowlingBall.position.z += gameState.ball.velocity.z * deltaTime; // Displace position along the forward depth track towards the pit
 
-    // 2. Procedural Rotation Modeling: Calculate continuous visual rotation matching circumstantial wheel roll physics speeds
+    // Procedural Rotation Modeling: Calculate continuous visual rotation matching circumstantial wheel roll physics speeds
     const forwardLinearSpeed = Math.abs(gameState.ball.velocity.z); // Extract absolute velocity component traversing down-lane
     bowlingBall.rotation.x += (forwardLinearSpeed / 0.45) * deltaTime; // Increment angular displacement around local X axis to simulate true roll traction
 
-    // 3. SPHERE-VS-CYLINDER PIN IMPACT COLLISION DETECTION LOOP
+    // SPHERE-VS-CYLINDER PIN IMPACT COLLISION DETECTION LOOP
     if (!gameState.ball.isGutter) {
       // Sweep diagnostic distance checks across every pin object inside our structural tracking state tracking matrix
       pinsStateArray.forEach((pin) => {
@@ -1143,7 +1143,7 @@ function updateGame(deltaTime) {
       });
     }
 
-    // 4. Boundary Gutter Ball Detection: Evaluate if ball horizontal extent crosses past physical lane limits (|x| > 1.75 wide)
+    // Boundary Gutter Ball Detection: Evaluate if ball horizontal extent crosses past physical lane limits (|x| > 1.75 wide)
     if (!gameState.ball.isGutter && Math.abs(bowlingBall.position.x) > 1.75) {
       gameState.ball.isGutter = true;                    // Flip systemic evaluation status flag to enforce gutter tracking rules
       bowlingBall.position.y = -0.05;                    // Depress ball altitude down flush into the physical drop channel floor plane
@@ -1151,7 +1151,7 @@ function updateGame(deltaTime) {
       console.log("Gutter Ball Detected! Ball dropped into side channel floor tracking tracks.");
     }
 
-    // 5. Pit Terminal Boundary Detection: Identify when rolling sphere reaches the absolute end limits of the pin layout zone
+    // Pit Terminal Boundary Detection: Identify when rolling sphere reaches the absolute end limits of the pin layout zone
     if (bowlingBall.position.z <= -60.0) {
       gameState.ball.velocity.set(0, 0, 0);              // Freeze all structural velocity components to bring the ball mesh to a dead halt in the pit
       gameState.phase = 'resolving';                     // Advance global state machine phase string flag to transition into resolution pipelines
