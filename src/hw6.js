@@ -468,7 +468,7 @@ function handleKeyDown(e) {
     // Determine strict scaling modifier to dictate movement distance per active keystroke tap
     const movementStep = 0.1;
     // Calculate physical clamping boundary. Lane width is 3.5, half is 1.75. We clamp to 1.3 to avoid early gutter clips.
-    const maxEdgeLimit = 1.3;
+    const maxEdgeLimit = 2;
 
     if (e.key === 'ArrowLeft') {
       // Subtract translation step from global state aiming tracker to drift ball towards negative X (left)
