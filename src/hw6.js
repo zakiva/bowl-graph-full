@@ -3,7 +3,7 @@
 // MILESTONE 1: STRUCTURAL SETUP & STATE MACHINE ARCHITECTURE
 // MILESTONE 2: INPUT HANDLING & DYNAMIC POWER METER UI
 // MILESTONE 3: ANALYTICAL BALL PHYSICS & GUTTER DETECTION (BONUS STRIPPED)
-// MILESTONE 4: COLLISION DETECTION & PROCEDURAL PIN TOPPLING
+// MILESTONE 4: COLLISION DETECTION & PROCEDURAL PIN TOPPLING (CASCADE BUG FIXED)
 // =============================================================================
 
 import { OrbitControls } from './OrbitControls.js';
@@ -620,7 +620,7 @@ document.body.appendChild(powerMeterContainer);
 
 
 // =============================================================================
-// 14. MILESTONE 4: PIN-TO-PIN CASCADE MOMENTUM PROPAGATION METHOD
+// 14. MILESTONE 4: PIN-TO-PIN DIRECTIONAL CONE CASCADE METHOD (BUG FIXED)
 // =============================================================================
 
 // Helper subroutine checking proximity matrices to simulate chain-reaction pin knockdowns
@@ -639,26 +639,35 @@ function triggerPinCascade(sourcePin) {
     // Use the 2D Pythagorean theorem to derive absolute center spacing distance intervals
     const distanceBetweenPins = Math.sqrt(dx * dx + dz * dz);
     
-    // Regulation pin spacing center-to-center is exactly 1.0 unit. We use a threshold of 1.15 to capture neighbors with room for tilt extensions.
+    // Proximity threshold to identify an immediate touching neighbor pin layout structure
     if (distanceBetweenPins < 1.15) {
-      // Flag the target standing neighbor to begin running its procedural knockdown sequence
-      targetPin.isToppling = true;
+      // BUG FIX: Generate a vector from the source pin pointing directly toward the neighboring target pin
+      const toTargetVector = new THREE.Vector3(dx, 0, dz).normalize();
       
-      // Calculate a separate outwards procedural scatter vector away from the triggering source pin position
-      const scatterDir = new THREE.Vector3().subVectors(targetPin.mesh.position, sourcePin.mesh.position);
-      // Strip all vertical components out to lock trajectory distributions completely to the horizontal surface floor plane
-      scatterDir.y = 0;
-      // Reduce parameters down to a standard unit line segment
-      scatterDir.normalize();
+      // Calculate the Dot Product between the source pin's falling direction and the direction to the neighbor pin.
+      // This tells us if the source pin is actively falling *towards* or *away* from its neighbor.
+      const fallAlignmentDot = sourcePin.toppleDirection.dot(toTargetVector);
       
-      // Combine incoming momentum trajectories with outbound scatter biases, then normalize to output the final outbound fallback line path
-      const combinedToppleDir = new THREE.Vector3().addVectors(sourcePin.toppleDirection, scatterDir).normalize();
-      
-      // Save the finalized direction vector straight into the neighbor pin object state dictionary tracking entry
-      targetPin.toppleDirection.copy(combinedToppleDir);
-      
-      // Recurse operations cleanly down the tree graph to drop further adjacent neighbors caught in the structural shockwave cascade path
-      triggerPinCascade(targetPin);
+      // Strict directional constraint gate: Only push the neighbor over if the dot product is positive (within a 120-degree forward cone).
+      // If a pin falls backwards or completely sideways away from a neighbor, it will cleanly miss it!
+      if (fallAlignmentDot > 0.3) {
+        // Flag the target standing neighbor to begin running its procedural knockdown sequence
+        targetPin.isToppling = true;
+        
+        // Calculate a separate outwards procedural scatter vector away from the triggering source pin position
+        const scatterDir = new THREE.Vector3().subVectors(targetPin.mesh.position, sourcePin.mesh.position);
+        scatterDir.y = 0;
+        scatterDir.normalize();
+        
+        // Combine incoming momentum trajectories with outbound scatter biases, then normalize to output the final outbound fallback line path
+        const combinedToppleDir = new THREE.Vector3().addVectors(sourcePin.toppleDirection, scatterDir).normalize();
+        
+        // Save the finalized direction vector straight into the neighbor pin object state dictionary tracking entry
+        targetPin.toppleDirection.copy(combinedToppleDir);
+        
+        // Recurse operations cleanly down the tree graph to drop further adjacent forward neighbors caught in the crash path
+        triggerPinCascade(targetPin);
+      }
     }
   });
 }
@@ -690,8 +699,7 @@ function updateGame(deltaTime) {
     }
   }
 
-  // MILESTONE 4: SMOOTH PIN TOPPLING ANIMATION MATRIX LOOP
-  // Iterate frames across every registered target pin to update real-time angular falls if flagged to topple
+  // SMOOTH PIN TOPPLING ANIMATION MATRIX LOOP
   pinsStateArray.forEach((pin) => {
     if (pin.isToppling) {
       // Increment the internal fallback rotation accumulator tracking angle increments across elapsed delta fractions
@@ -724,8 +732,7 @@ function updateGame(deltaTime) {
     const forwardLinearSpeed = Math.abs(gameState.ball.velocity.z); // Extract absolute velocity component traversing down-lane
     bowlingBall.rotation.x += (forwardLinearSpeed / 0.45) * deltaTime; // Increment angular displacement around local X axis to simulate true roll traction
 
-    // 3. MILESTONE 4: SPHERE-VS-CYLINDER PIN IMPACT COLLISION DETECTION LOOP
-    // Block active collision tracing loops if the ball has fallen off the lane boards into side drainage channels
+    // 3. SPHERE-VS-CYLINDER PIN IMPACT COLLISION DETECTION LOOP
     if (!gameState.ball.isGutter) {
       // Sweep diagnostic distance checks across every pin object inside our structural tracking state tracking matrix
       pinsStateArray.forEach((pin) => {
@@ -741,22 +748,20 @@ function updateGame(deltaTime) {
         // Compute 2D Euclidean spatial distance using the standard Pythagorean metric equation profile
         const targetImpactDistance = Math.sqrt(deltaX * deltaX + deltaZ * deltaZ);
         
-        // Math Boundary Definition: Ball Radius (0.45) + Scaled Pin Radius (0.23 max belly boundary) = 0.68 units total width limit threshold.
+        // Math Bounding Definition: Ball Radius (0.45) + Scaled Pin Radius (0.23 max belly boundary) = 0.68 units total width limit threshold.
         if (targetImpactDistance < 0.68) {
           // Advance animation logical status flag immediately to initiate the pin falling sequences
           pin.isToppling = true;
           
           // Generate a standalone outbound trajectory direction vector pushing directly away from the ball impact contact point
           const dynamicPushDir = new THREE.Vector3().subVectors(pin.mesh.position, bowlingBall.position);
-          // Strip vertical variables out to keep fallback forces perfectly true to the horizontal lane floor surface
           dynamicPushDir.y = 0;
-          // Scale components back down into standard uniform unit lengths
           dynamicPushDir.normalize();
           
           // Copy finalized trajectory metrics inside pin tracking memory state fields
           pin.toppleDirection.copy(dynamicPushDir);
           
-          // Execute the cascade propagation function subroutine to instantly knock over adjacent neighbors caught in the crash zone
+          // Execute the cascade propagation function subroutine to knock over adjacent neighbors caught in the crash zone
           triggerPinCascade(pin);
         }
       });
