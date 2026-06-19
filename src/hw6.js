@@ -540,6 +540,12 @@ function handleKeyDown(e) {
   }
 }
 
+  // TODO (HW06): add interactive controls, e.g.
+  //   ArrowLeft / ArrowRight : move / aim the ball along the foul line
+  //   ArrowUp   / ArrowDown  : adjust spin / curve (optional)
+  //   Space                  : start the power meter -> lock power -> release
+  //   r                      : reset pins / start a new game
+
 // Attach keyboard window listeners onto the primary web browser global document tree framework scope boundaries
 document.addEventListener('keydown', handleKeyDown);
 
@@ -560,30 +566,6 @@ function onWindowResize() {
 
 // Map the window resizing trigger wrapper to listen directly to native browser system resize signal pipelines
 window.addEventListener('resize', onWindowResize, false);
-
-
-// ============================================================================
-// FRAME REFRESH EMULATION RUNTIME LOOP SYSTEM
-// ============================================================================
-
-// Main frame clock routine updating display assets up to hardware processing refresh limits each second
-function animate() {
-  // Request system rendering schedules to cycle this execution method loop on the next available video frame swap
-  requestAnimationFrame(animate);
-
-  // Synchronize internal orbit status values with our master application toggle control setting state
-  controls.enabled = isOrbitEnabled;
-  
-  // Recalculate camera position transformation properties if user mouse drag gestures match true
-  controls.update();
-
-  // Draw the completely updated scene tree node graph perspective matrix directly back onto screen canvas buffer
-  renderer.render(scene, camera);
-}
-
-// Engage the engine runtime scheduling loops to launch viewport graphics draws into active, rendering states
-animate();
-
 
 
 
@@ -622,23 +604,6 @@ instructionsElement.innerHTML = `
 `;
 document.body.appendChild(instructionsElement);
 
-// =============================================================================
-// HW06 INPUT HANDLING
-// =============================================================================
-// Handle key events
-function handleKeyDown(e) {
-  if (e.key === "o") {
-    isOrbitEnabled = !isOrbitEnabled;
-  }
-
-  // TODO (HW06): add interactive controls, e.g.
-  //   ArrowLeft / ArrowRight : move / aim the ball along the foul line
-  //   ArrowUp   / ArrowDown  : adjust spin / curve (optional)
-  //   Space                  : start the power meter -> lock power -> release
-  //   r                      : reset pins / start a new game
-}
-
-document.addEventListener('keydown', handleKeyDown);
 
 // =============================================================================
 // HW06 PHYSICS & COLLISION (called every frame from animate)
