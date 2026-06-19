@@ -762,7 +762,7 @@ function lookAheadBonusRollPins(startFrameIdx, requestedRollsCount) {
   
   // If look-ahead tracking arrays accurately match requests, reduce entries into a clean integer sum; else return null
   if (aggregatedBonusList.length === requestedRollsCount) {
-    return aggregatedBonusList.reduce((sumAccumulator, currentElement) => sumAccumulator + currentEnergyCell, 0);
+    return aggregatedBonusList.reduce((sumAccumulator, currentElement) => sumAccumulator + currentElement, 0);
   }
   return null;
 }
@@ -873,7 +873,7 @@ function updateScorecardDOMDisplay() {
 // =============================================================================
 
 // Procedural workflow calculating raw pin tally differences, advancing state loops, and flagging pin deck configurations
-function executeScore ProgressionWorkflow(fallenPinsCount) {
+function executeScoreProgressionWorkflow(fallenPinsCount) {
   const targetFrameData = gameState.scorecard[gameState.currentFrame - 1];
   
   // MANAGEMENT FOR STANDARD TIMELINE INTERVAL MAPS (FRAMES 1 THROUGH 9)
