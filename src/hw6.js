@@ -3,6 +3,7 @@
 // MILESTONE 1: STRUCTURAL SETUP & STATE MACHINE ARCHITECTURE
 // MILESTONE 2: INPUT HANDLING & DYNAMIC POWER METER UI
 // MILESTONE 3: ANALYTICAL BALL PHYSICS & GUTTER DETECTION (BONUS STRIPPED)
+// MILESTONE 4: COLLISION DETECTION & PROCEDURAL PIN TOPPLING
 // =============================================================================
 
 import { OrbitControls } from './OrbitControls.js';
@@ -486,8 +487,6 @@ function handleKeyDown(e) {
       // Pipe confirmed coordinate math directly into the live bowling ball group mesh X position offset vector
       bowlingBall.position.x = gameState.ball.aimX;
     }
-    
-    // NOTE: Up and Down arrow hook keys are omitted here as they belong to the stripped bonus criteria.
   }
   
   // SPACEBAR TIMING & LAUNCH INTERFACE ROUTER
@@ -556,8 +555,8 @@ const gameState = {
   
   ball: {
     aimX: 0.0,                         // Current horizontal offset positioning of ball along the foul line channel
-    isGutter: false,                   // MILESTONE 3: Boolean state tracking if ball has breached lane boundaries into channels
-    resolveTimer: 0.0,                 // MILESTONE 3: Simple frame accumulator used to handle automated temporary testing resets
+    isGutter: false,                   // Boolean state tracking if ball has breached lane boundaries into channels
+    resolveTimer: 0.0,                 // Simple frame accumulator used to handle automated temporary testing resets
     powerScale: 0.0,                   // Scalar tracing power charge metrics from timing bar gauge inputs (0.0 to 1.0 caps)
     powerOscillationTime: 0.0,         // Timing accumulator tracking elapsed seconds specifically for the sine wave power calculation
     velocity: new THREE.Vector3(0,0,0) // Physical 3D velocity vector managing displacement integration loops inside frame cycles
@@ -621,6 +620,51 @@ document.body.appendChild(powerMeterContainer);
 
 
 // =============================================================================
+// 14. MILESTONE 4: PIN-TO-PIN CASCADE MOMENTUM PROPAGATION METHOD
+// =============================================================================
+
+// Helper subroutine checking proximity matrices to simulate chain-reaction pin knockdowns
+function triggerPinCascade(sourcePin) {
+  // Run an analytical loop across all pin structures in our master state registry
+  pinsStateArray.forEach((targetPin) => {
+    // Skip checking if evaluating the source pin itself, or if target pin is already falling/down
+    if (targetPin.id === sourcePin.id || !targetPin.isStanding || targetPin.isToppling) {
+      return;
+    }
+    
+    // Calculate individual transverse delta line lengths separating the two pin mesh origins
+    const dx = targetPin.mesh.position.x - sourcePin.mesh.position.x;
+    const dz = targetPin.mesh.position.z - sourcePin.mesh.position.z;
+    
+    // Use the 2D Pythagorean theorem to derive absolute center spacing distance intervals
+    const distanceBetweenPins = Math.sqrt(dx * dx + dz * dz);
+    
+    // Regulation pin spacing center-to-center is exactly 1.0 unit. We use a threshold of 1.15 to capture neighbors with room for tilt extensions.
+    if (distanceBetweenPins < 1.15) {
+      // Flag the target standing neighbor to begin running its procedural knockdown sequence
+      targetPin.isToppling = true;
+      
+      // Calculate a separate outwards procedural scatter vector away from the triggering source pin position
+      const scatterDir = new THREE.Vector3().subVectors(targetPin.mesh.position, sourcePin.mesh.position);
+      // Strip all vertical components out to lock trajectory distributions completely to the horizontal surface floor plane
+      scatterDir.y = 0;
+      // Reduce parameters down to a standard unit line segment
+      scatterDir.normalize();
+      
+      // Combine incoming momentum trajectories with outbound scatter biases, then normalize to output the final outbound fallback line path
+      const combinedToppleDir = new THREE.Vector3().addVectors(sourcePin.toppleDirection, scatterDir).normalize();
+      
+      // Save the finalized direction vector straight into the neighbor pin object state dictionary tracking entry
+      targetPin.toppleDirection.copy(combinedToppleDir);
+      
+      // Recurse operations cleanly down the tree graph to drop further adjacent neighbors caught in the structural shockwave cascade path
+      triggerPinCascade(targetPin);
+    }
+  });
+}
+
+
+// =============================================================================
 // 12. HW06 MASTER PHYSICS ENTRY & STATE RESOLUTION LOOPS
 // =============================================================================
 
@@ -646,21 +690,79 @@ function updateGame(deltaTime) {
     }
   }
 
-  // MILESTONE 3: KINEMATIC INTEGRATION ENGINE & DETECTORS
+  // MILESTONE 4: SMOOTH PIN TOPPLING ANIMATION MATRIX LOOP
+  // Iterate frames across every registered target pin to update real-time angular falls if flagged to topple
+  pinsStateArray.forEach((pin) => {
+    if (pin.isToppling) {
+      // Increment the internal fallback rotation accumulator tracking angle increments across elapsed delta fractions
+      pin.toppleAngle += deltaTime * 5.0; // 5.0 speed scalar forces a rapid, satisfying impact snap action
+      
+      // Evaluate if the rotating pin has traversed past a full 90-degree right angle arc to lay completely horizontal
+      if (pin.toppleAngle >= Math.PI / 2) {
+        pin.toppleAngle = Math.PI / 2; // Hard clamp value directly to absolute right-angle fractions to prevent geometry over-rotations
+        pin.isToppling = false;        // Deactivate ongoing animation calculation trackers for this entry
+        pin.isStanding = false;        // Permanently flag this pin status record as flattened / down
+        pin.mesh.visible = false;       // Hide the 3D entity cluster node from active WebGL camera fragment renderer sweeps
+      }
+      
+      // Calculate a custom horizontal axis of rotation perpendicular to both the world vertical vector (Y) and the targeted fallback direction vector
+      const crossRotationAxis = new THREE.Vector3(0, 1, 0).cross(pin.toppleDirection).normalize();
+      
+      // Construct and overwrite the transformation properties of the live 3D pin group group mesh using the customized rotation axis parameters
+      pin.mesh.setRotationFromAxisAngle(crossRotationAxis, pin.toppleAngle);
+    }
+  });
+
+  // KINEMATIC INTEGRATION ENGINE & DETECTORS
   if (gameState.phase === 'rolling') {
     
     // 1. Analytical Euler Integration: Advance 3D positions sequentially derived from active velocity vector capacities.
-    // The horizontal velocity (velocity.x) remains a constant 0 because we stripped out the bonus sideways hook forces.
     bowlingBall.position.x += gameState.ball.velocity.x * deltaTime; // Displace position along the horizontal width track
     bowlingBall.position.z += gameState.ball.velocity.z * deltaTime; // Displace position along the forward depth track towards the pit
 
     // 2. Procedural Rotation Modeling: Calculate continuous visual rotation matching circumstantial wheel roll physics speeds
-    // Linear velocity equals angular velocity multiplied by radius (V = omega * R). Therefore omega = V / R. Bounding radius = 0.45.
     const forwardLinearSpeed = Math.abs(gameState.ball.velocity.z); // Extract absolute velocity component traversing down-lane
     bowlingBall.rotation.x += (forwardLinearSpeed / 0.45) * deltaTime; // Increment angular displacement around local X axis to simulate true roll traction
 
-    // 3. Boundary Gutter Ball Detection: Evaluate if ball horizontal extent crosses past physical lane limits (|x| > 1.75 wide)
-    // If you aim the ball near the edge, it will roll straight down and clip the gutter line cleanly.
+    // 3. MILESTONE 4: SPHERE-VS-CYLINDER PIN IMPACT COLLISION DETECTION LOOP
+    // Block active collision tracing loops if the ball has fallen off the lane boards into side drainage channels
+    if (!gameState.ball.isGutter) {
+      // Sweep diagnostic distance checks across every pin object inside our structural tracking state tracking matrix
+      pinsStateArray.forEach((pin) => {
+        // Skip operational tracking if the selected pin structure has already been knocked flat or is currently falling
+        if (!pin.isStanding || pin.isToppling) {
+          return;
+        }
+        
+        // Calculate separate horizontal spatial delta vectors separating the current ball center from the pin axis line center
+        const deltaX = bowlingBall.position.x - pin.mesh.position.x;
+        const deltaZ = bowlingBall.position.z - pin.mesh.position.z;
+        
+        // Compute 2D Euclidean spatial distance using the standard Pythagorean metric equation profile
+        const targetImpactDistance = Math.sqrt(deltaX * deltaX + deltaZ * deltaZ);
+        
+        // Math Boundary Definition: Ball Radius (0.45) + Scaled Pin Radius (0.23 max belly boundary) = 0.68 units total width limit threshold.
+        if (targetImpactDistance < 0.68) {
+          // Advance animation logical status flag immediately to initiate the pin falling sequences
+          pin.isToppling = true;
+          
+          // Generate a standalone outbound trajectory direction vector pushing directly away from the ball impact contact point
+          const dynamicPushDir = new THREE.Vector3().subVectors(pin.mesh.position, bowlingBall.position);
+          // Strip vertical variables out to keep fallback forces perfectly true to the horizontal lane floor surface
+          dynamicPushDir.y = 0;
+          // Scale components back down into standard uniform unit lengths
+          dynamicPushDir.normalize();
+          
+          // Copy finalized trajectory metrics inside pin tracking memory state fields
+          pin.toppleDirection.copy(dynamicPushDir);
+          
+          // Execute the cascade propagation function subroutine to instantly knock over adjacent neighbors caught in the crash zone
+          triggerPinCascade(pin);
+        }
+      });
+    }
+
+    // 4. Boundary Gutter Ball Detection: Evaluate if ball horizontal extent crosses past physical lane limits (|x| > 1.75 wide)
     if (!gameState.ball.isGutter && Math.abs(bowlingBall.position.x) > 1.75) {
       gameState.ball.isGutter = true;                    // Flip systemic evaluation status flag to enforce gutter tracking rules
       bowlingBall.position.y = -0.05;                    // Depress ball altitude down flush into the physical drop channel floor plane
@@ -668,7 +770,7 @@ function updateGame(deltaTime) {
       console.log("Gutter Ball Detected! Ball dropped into side channel floor tracking tracks.");
     }
 
-    // 4. Pit Terminal Boundary Detection: Identify when rolling sphere reaches the absolute end limits of the pin layout zone
+    // 5. Pit Terminal Boundary Detection: Identify when rolling sphere reaches the absolute end limits of the pin layout zone
     if (bowlingBall.position.z <= -60.0) {
       gameState.ball.velocity.set(0, 0, 0);              // Freeze all structural velocity components to bring the ball mesh to a dead halt in the pit
       gameState.phase = 'resolving';                     // Advance global state machine phase string flag to transition into resolution pipelines
@@ -688,7 +790,20 @@ function updateGame(deltaTime) {
       bowlingBall.position.set(0, 0.55, 4);              // Translate ball group position back to starting stance on approach runway track
       bowlingBall.rotation.set(degrees_to_radians(45), 0, 0); // Restore initial forward angle profile where finger holes tilt up
       gameState.phase = 'aiming';                        // Return control authority to the player aiming input router systems
-      console.log("Milestone 3 Safety Loop Triggered: Ball successfully reset to approach lane. Ready for next test throw.");
+      
+      // MILESTONE 4 RESET INTEGRATION: Loop through and re-erect all knocked target pins for continuous testing passes
+      pinsStateArray.forEach((pin) => {
+        pin.isStanding = true;                           // Re-assert structural standing verification status parameters
+        pin.isToppling = false;                          // Guarantee frame update calculation sequences bypass this entry
+        pin.toppleAngle = 0.0;                           // Wipe out residual fallback rotation values to return to 0 center marks
+        pin.mesh.rotation.set(0, 0, 0);                  // Restore original native transformed rotation layout orientations
+        pin.mesh.visible = true;                         // Un-hide the group node tree so it renders clearly back on the deck plate
+      });
+      
+      // Re-initialize tracking scoreboard standing value to perfect game starting baselines
+      gameState.pinsStandingCount = 10;
+      
+      console.log("Milestone 4 Dynamic Safety Loop Triggered: Ball & Pin layouts successfully reset to approach lane. Ready for next test throw.");
     }
   }
 }
