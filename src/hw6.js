@@ -1,10 +1,5 @@
 // =============================================================================
 // Computer Graphics - Exercise 6 - Interactive Bowling Game
-// MILESTONE 1: STRUCTURAL SETUP & STATE MACHINE ARCHITECTURE
-// MILESTONE 2: INPUT HANDLING & DYNAMIC POWER METER UI
-// MILESTONE 3: ANALYTICAL BALL PHYSICS & GUTTER DETECTION (BONUS STRIPPED)
-// MILESTONE 4: COLLISION DETECTION & PROCEDURAL PIN TOPPLING (KINETIC DECAY FIX)
-// MILESTONE 5: BOWLING SCORING ENGINE & DOM PANEL SYNCHRONIZATION
 // =============================================================================
 
 import { OrbitControls } from './OrbitControls.js';
@@ -464,9 +459,9 @@ function handleKeyDown(e) {
     controls.update();
   }
 
-  // MILESTONE 5 SAFETY GATE: Ignore active gameplay mechanics inputs if the match scenario enters a terminal game-over phase
+  // SAFETY GATE: Ignore active gameplay mechanics inputs if the match scenario enters a terminal game-over phase
   if (gameState.phase === 'game_over') {
-    // MILESTONE 5 RESTARTER HOOK: Intercept 'R' key presses during the game-over screen to cleanly recycle and start a fresh session
+    // RESTARTER HOOK: Intercept 'R' key presses during the game-over screen to cleanly recycle and start a fresh session
     if (e.key === 'r' || e.key === 'R') {
       resetCompleteBowlingGame();
     }
@@ -524,12 +519,12 @@ function handleKeyDown(e) {
       // Value is negative because the lane extends into negative Z-coordinate space.
       gameState.ball.velocity.set(0, 0, -launchSpeed);
       
-      // MILESTONE 5 STATE BIND: Assert a systemic scoring lockout flag to guarantee frame calculations execute exactly once on pit entry
+      // STATE BIND: Assert a systemic scoring lockout flag to guarantee frame calculations execute exactly once on pit entry
       gameState.ball.scoreLogged = false;
     }
   }
 
-  // MILESTONE 5 INTERACTIVE UTILITY: Map 'R' key keystrokes during active normal phases to permit sudden voluntary resets
+  // INTERACTIVE UTILITY: Map 'R' key keystrokes during active normal phases to permit sudden voluntary resets
   if (e.key === 'r' || e.key === 'R') {
     resetCompleteBowlingGame();
   }
@@ -574,8 +569,8 @@ const gameState = {
     powerScale: 0.0,                   // Scalar tracing power charge metrics from timing bar gauge inputs (0.0 to 1.0 caps)
     powerOscillationTime: 0.0,         // Timing accumulator tracking elapsed seconds specifically for the sine wave power calculation
     velocity: new THREE.Vector3(0,0,0),// Physical 3D velocity vector managing displacement integration loops inside frame cycles
-    scoreLogged: false,                // MILESTONE 5: Protection flag locking computation passes down to singular strict evaluations
-    pinsToResetNext: true              // MILESTONE 5: Flow parameter alerting whether the next resolution frame requires a full 10-pin rack reset
+    scoreLogged: false,                // Protection flag locking computation passes down to singular strict evaluations
+    pinsToResetNext: true              //  Flow parameter alerting whether the next resolution frame requires a full 10-pin rack reset
   },
   
   // Structural data grid array organizing thrown score pinfalls, strike markers, and spare tracking flags across all 10 frames
@@ -598,7 +593,7 @@ const gameState = {
 // Target default controls guide element box injected from HTML script headers
 const instructionsElement = document.getElementById('controls-container');
 
-// MILESTONE 5 EXTENSION: Dynamic HUD compiler rewriting shortcuts and attaching live frame, roll, and game status notifications
+// Dynamic HUD compiler rewriting shortcuts and attaching live frame, roll, and game status notifications
 function updateHUDControlsText() {
   if (!instructionsElement) return;
   
@@ -649,7 +644,7 @@ document.body.appendChild(powerMeterContainer);
 
 
 // =============================================================================
-// 15. MILESTONE 5: OFFICIAL TEN-FRAME BOWLING SCORING SYSTEM ENGINE
+// OFFICIAL TEN-FRAME BOWLING SCORING SYSTEM ENGINE
 // =============================================================================
 
 // Mathematical algorithm computing cumulative cascading bowling scorecard configurations with look-ahead bonus checking
@@ -706,7 +701,7 @@ function calculateCompleteBowlingScore() {
         // Evaluation Step C: Open Frame Evaluation
         else if (frame.rolls.length >= 2) {
           frame.isSpare = false;
-          // Open frame calculations append flat non-multiplied sum variables directly to current cumulative milestones
+          // Open frame calculations append flat non-multiplied sum variables directly to current cumulative
           runningScoreAccumulator += baselineFrameSum;
           frame.cumulativeTotal = runningScoreAccumulator;
         } 
@@ -769,7 +764,7 @@ function lookAheadBonusRollPins(startFrameIdx, requestedRollsCount) {
 
 
 // =============================================================================
-// 16. MILESTONE 5: DOM PANEL SYNCHRONIZATION HUD ENGINE
+// DOM PANEL SYNCHRONIZATION HUD ENGINE
 // =============================================================================
 
 // High-performance mapping pipeline routing internal state scores straight into HTML table columns using official bowling shorthand
@@ -869,7 +864,7 @@ function updateScorecardDOMDisplay() {
 
 
 // =============================================================================
-// 17. MILESTONE 5: TIMELINE LIFECYCLE PROGRESSION MANAGER
+// TIMELINE LIFECYCLE PROGRESSION MANAGER
 // =============================================================================
 
 // Procedural workflow calculating raw pin tally differences, advancing state loops, and flagging pin deck configurations
@@ -998,7 +993,7 @@ function resetCompleteBowlingGame() {
 
 
 // =============================================================================
-// 14. MILESTONE 4: PIN-TO-PIN DIRECTIONAL CONE CASCADE METHOD
+// PIN-TO-PIN DIRECTIONAL CONE CASCADE METHOD
 // =============================================================================
 
 // Helper subroutine checking proximity matrices to simulate chain-reaction pin knockdowns with energy decay thresholds
@@ -1160,17 +1155,17 @@ function updateGame(deltaTime) {
     if (bowlingBall.position.z <= -60.0) {
       gameState.ball.velocity.set(0, 0, 0);              // Freeze all structural velocity components to bring the ball mesh to a dead halt in the pit
       gameState.phase = 'resolving';                     // Advance global state machine phase string flag to transition into resolution pipelines
-      gameState.ball.resolveTimer = 0.0;                 // Initialize local safety frame accumulator timer for Milestone 3 testing stability
+      gameState.ball.resolveTimer = 0.0;                 // Initialize local safety frame accumulator timer for testing stability
       console.log("Terminal Boundary Breached: Ball came to rest at pin end. Transitioning to 'resolving' state phase.");
     }
   }
 
-  // MILESTONE 5 PAUSE FRAME TRANSITION ENGINE
+  // PAUSE FRAME TRANSITION ENGINE
   if (gameState.phase === 'resolving') {
     // Accumulate framework timeline metrics inside tracking safety variable
     gameState.ball.resolveTimer += deltaTime;
     
-    // MILESTONE 5 LIFECYCLE INTERCEPT: Run timeline calculations exactly once upon pit transition entry
+    // LIFECYCLE INTERCEPT: Run timeline calculations exactly once upon pit transition entry
     if (!gameState.ball.scoreLogged) {
       // Calculate currently triggered fallen pin metrics totals
       const compiledFallenCount = pinsStateArray.filter(p => !p.isStanding || p.isToppling).length;
@@ -1192,7 +1187,7 @@ function updateGame(deltaTime) {
         gameState.phase = 'aiming';                      // Hand control authority back to the bowler aiming routers
       }
       
-      // MILESTONE 5 DECK CONDITIONS RESETS: If previous throws completed a frame or earned a strike/spare, clear full layout fields
+      // DECK CONDITIONS RESETS: If previous throws completed a frame or earned a strike/spare, clear full layout fields
       if (gameState.ball.pinsToResetNext) {
         pinsStateArray.forEach((pin) => {
           pin.isStanding = true;                         // Re-erect structural parameter logs
