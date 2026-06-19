@@ -2,6 +2,7 @@
 // Computer Graphics - Exercise 6 - Interactive Bowling Game
 // MILESTONE 1: STRUCTURAL SETUP & STATE MACHINE ARCHITECTURE
 // MILESTONE 2: INPUT HANDLING & DYNAMIC POWER METER UI
+// MILESTONE 3: ANALYTICAL BALL PHYSICS & GUTTER DETECTION
 // =============================================================================
 
 import { OrbitControls } from './OrbitControls.js';
@@ -461,13 +462,11 @@ function handleKeyDown(e) {
     controls.update();
   }
 
-  // MILESTONE 2: BALL POSITIONING & AIMING SUBSYSTEM
-  // Verify system phase permits horizontal translation input adjustments
+  // Verify system phase permits operational adjustment updates
   if (gameState.phase === 'aiming') {
     // Determine strict scaling modifier to dictate movement distance per active keystroke tap
     const movementStep = 0.1;
-    // Calculate physical clamping boundary. Lane width is 3.5, half is 1.75. 
-    // We restrict the ball origin to 1.3 to guarantee the 0.45 radius sphere never clips over the gutter edge before release.
+    // Calculate physical clamping boundary. Lane width is 3.5, half is 1.75. We clamp to 1.3 to avoid early gutter clips.
     const maxEdgeLimit = 1.3;
 
     if (e.key === 'ArrowLeft') {
@@ -487,9 +486,24 @@ function handleKeyDown(e) {
       // Pipe confirmed coordinate math directly into the live bowling ball group mesh X position offset vector
       bowlingBall.position.x = gameState.ball.aimX;
     }
+
+    // MILESTONE 3: ADDING INTERACTIVE SPIN ADJUSTMENT HOOKS
+    if (e.key === 'ArrowUp') {
+      // Increase the hook vector coefficient to introduce a positive curve drift acceleration (curves rightward)
+      gameState.ball.spinHook += 0.5;
+      // Log to console so bowler can evaluate raw numerical curve vectors applied before launch
+      console.log(`Spin Vector Increased: ${gameState.ball.spinHook}`);
+    }
+
+    if (e.key === 'ArrowDown') {
+      // Decrease the hook vector coefficient to introduce a negative curve drift acceleration (curves leftward)
+      gameState.ball.spinHook -= 0.5;
+      // Log to console so bowler can evaluate raw numerical curve vectors applied before launch
+      console.log(`Spin Vector Decreased: ${gameState.ball.spinHook}`);
+    }
   }
   
-  // MILESTONE 2: SPACEBAR TIMING & LAUNCH INTERFACE ROUTER
+  // SPACEBAR TIMING & LAUNCH INTERFACE ROUTER
   if (e.key === ' ') {
     // Gateway 1: Transition from setup aiming phase into active power charging oscillation cycle
     if (gameState.phase === 'aiming') {
@@ -508,14 +522,11 @@ function handleKeyDown(e) {
       powerMeterContainer.style.display = 'none';
       
       // Calculate derived launch velocity. Base minimum throw speed is 15. Absolute maximum theoretical speed is 45.
-      // We scale the difference (30) by our 0.0-1.0 locked power fraction, and add it to the base minimum.
       const launchSpeed = 15 + (30 * gameState.ball.powerScale);
       
       // Assign the computed scalar velocity straight into the Z-axis of our master tracking velocity Vector3.
       // Value is negative because the lane extends into negative Z-coordinate space.
       gameState.ball.velocity.set(0, 0, -launchSpeed);
-      
-      // The kinematic `updateGame` physics loop will now automatically capture this vector and begin translating the ball mesh down-lane.
     }
   }
   
@@ -558,9 +569,11 @@ const gameState = {
   
   ball: {
     aimX: 0.0,                         // Current horizontal offset positioning of ball along the foul line channel
-    spinHook: 0.0,                     // Variable saving calculated side acceleration modifiers to derive curvature arc paths
-    powerScale: 0.0,                   // MILESTONE 2: Scalar tracing power charge metrics from timing bar gauge inputs (0.0 to 1.0 caps)
-    powerOscillationTime: 0.0,         // MILESTONE 2: Timing accumulator tracking elapsed seconds specifically for the sine wave power calculation
+    spinHook: 0.0,                     // MILESTONE 3: Active curve force factor applied iteratively to horizontal drift
+    isGutter: false,                   // MILESTONE 3: Boolean state tracking if ball has breached lane boundaries into channels
+    resolveTimer: 0.0,                 // MILESTONE 3: Simple frame accumulator used to handle automated temporary testing resets
+    powerScale: 0.0,                   // Scalar tracing power charge metrics from timing bar gauge inputs (0.0 to 1.0 caps)
+    powerOscillationTime: 0.0,         // Timing accumulator tracking elapsed seconds specifically for the sine wave power calculation
     velocity: new THREE.Vector3(0,0,0) // Physical 3D velocity vector managing displacement integration loops inside frame cycles
   },
   
@@ -591,51 +604,34 @@ if (instructionsElement) {
     <p><span class="key-badge">Mouse Click + Drag</span> Rotate Camera View</p>
     <p><span class="key-badge">Scroll Wheel</span> Zoom View In/Out</p>
     <p><span class="key-badge">Left / Right Arrow</span> Aim / Move Ball Position</p>
+    <p><span class="key-badge">Up / Down Arrow</span> Adjust Hook / Spin Curve Vector</p>
     <p><span class="key-badge">Spacebar</span> Start Gauge / Lock Power & Release</p>
     <p><span class="key-badge">R</span> Reset Simulation / New Game</p>
     <p><span class="key-badge">V</span> Toggle Bowler vs Pin-End Vantage Views</p>
   `;
 }
 
-// MILESTONE 2: DYNAMIC POWER METER UI INJECTION
-// We build a completely custom DOM interface wrapper element using raw JavaScript to host the charging gauge graphic
+// DYNAMIC POWER METER UI INJECTION
 const powerMeterContainer = document.createElement('div');
-// Disconnect flow layout restrictions and absolute position it independently above the rendering canvas
 powerMeterContainer.style.position = 'absolute';
-// Anchor container 50px up from the absolute bottom edge of the user viewport window
 powerMeterContainer.style.bottom = '50px';
-// Align to exact center of the horizontal X-axis and slide it left by -50% of its own width for perfect visual centering
 powerMeterContainer.style.left = '50%';
 powerMeterContainer.style.transform = 'translateX(-50%)';
-// Establish rigid geometric bounding width tracking 300 pixels
 powerMeterContainer.style.width = '300px';
-// Set vertical thickness to 25 pixels
 powerMeterContainer.style.height = '25px';
-// Lay down a semi-transparent dark synthetic background track to contrast the bright moving gauge bar
 powerMeterContainer.style.background = 'rgba(20, 24, 42, 0.8)';
-// Carve a 2-pixel pure white border rim encapsulating the entire gauge component
 powerMeterContainer.style.border = '2px solid white';
-// Soften geometric sharp corners to match standard modern application HUD design guidelines
 powerMeterContainer.style.borderRadius = '12px';
-// Hide element completely from rendering pipelines until the user explicitly transitions into the 'power' state phase
 powerMeterContainer.style.display = 'none';
-// Prevent any overlapping elements from overflowing outside the border radius curve constraints
 powerMeterContainer.style.overflow = 'hidden';
 
-// Build the internal dynamic fill bar DOM element responsible for visualizing the rapidly changing power fraction math
 const powerMeterFill = document.createElement('div');
-// Lock vertical height scaling to fully consume the parent container 25px space allocation
 powerMeterFill.style.height = '100%';
-// Initialize bar width starting completely empty at 0%
 powerMeterFill.style.width = '0%';
-// Assign baseline vivid emerald green hex color to signify safe low-power throwing thresholds
 powerMeterFill.style.background = '#2ecc71';
-// Strip all CSS timing transition delays to guarantee 1:1 real-time visual syncing with the 60FPS Javascript game loop
 powerMeterFill.style.transition = 'none';
 
-// Mount inner fill bar DOM node securely inside outer container framework node
 powerMeterContainer.appendChild(powerMeterFill);
-// Mount fully compiled container gauge group directly into the live HTML document body structure layout
 document.body.appendChild(powerMeterContainer);
 
 
@@ -646,44 +642,75 @@ document.body.appendChild(powerMeterContainer);
 // Unified update controller parsing elapsed framerate timings to update positions and structural checks
 function updateGame(deltaTime) {
   
-  // MILESTONE 2: OSCILLATING POWER CHARGE TIMING LOOP
-  // Intercept the game loop precisely when the state machine registers an active charging cycle phase
+  // OSCILLATING POWER CHARGE TIMING LOOP
   if (gameState.phase === 'power') {
-    // Accumulate hardware delta time fractions into our dedicated tracking variable. 
-    // Multiply by a speed coefficient modifier (e.g. 4) to force the oscillation to cycle much faster.
+    // Accumulate hardware delta time fractions scaled by a factor of 4 to accelerate oscillation frequency cycles
     gameState.ball.powerOscillationTime += deltaTime * 4.0;
-    
-    // Utilize a mathematical Sine wave function to produce continuous smooth oscillating waves between -1.0 and 1.0.
-    // By adding 1.0 to the result (shifts to 0.0 -> 2.0) and dividing by 2, we safely map the output to a strict 0.0 -> 1.0 fractional decimal limit.
+    // Map standard continuous Sine wave results (-1.0 to 1.0) into strict fractional scalar metrics (0.0 to 1.0 caps)
     gameState.ball.powerScale = (Math.sin(gameState.ball.powerOscillationTime) + 1.0) / 2.0;
-    
-    // Convert the 0.0 -> 1.0 fractional scalar directly into a CSS percentage string mapping (0% to 100%) to resize the physical UI bar
+    // Bind current power fraction directly to the width percentage of our visual interface bar element
     powerMeterFill.style.width = `${gameState.ball.powerScale * 100}%`;
     
-    // Dynamically update the color of the UI gauge based on the current threshold tier to provide clear user feedback limits
+    // Dynamic color tier sorting updates providing clear visual feedback thresholds
     if (gameState.ball.powerScale < 0.33) {
-      // Lower third bounds assigned a safe emerald green color token mapping
-      powerMeterFill.style.background = '#2ecc71';
+      powerMeterFill.style.background = '#2ecc71'; // Low capacity tier mapped to emerald green
     } else if (gameState.ball.powerScale < 0.66) {
-      // Middle third bounds transition to a warning sunflower yellow tint identifier
-      powerMeterFill.style.background = '#f1c40f';
+      powerMeterFill.style.background = '#f1c40f'; // Mid capacity tier mapped to warning yellow
     } else {
-      // Upper third maximum threshold tier locked to a dangerous deep crimson red hue profile
-      powerMeterFill.style.background = '#e74c3c';
+      powerMeterFill.style.background = '#e74c3c'; // Max capacity tier mapped to alert crimson red
     }
   }
 
-  // Guard clause blocking kinematic spatial calculation sweeps if phase properties match static non-rolling state rules
-  if (gameState.phase !== 'rolling' && gameState.phase !== 'resolving') {
-    return;
+  // MILESTONE 3: KINEMATIC INTEGRATION ENGINE & DETECTORS
+  if (gameState.phase === 'rolling') {
+    
+    // 1. Hook/Curve Dynamics Physics: Evaluate if ball is traveling down clean wood lanes rather than drainage gutters
+    if (!gameState.ball.isGutter) {
+      // Apply constant lateral acceleration driven by spin hook inputs to alter horizontal velocity components over elapsed time frames
+      gameState.ball.velocity.x += gameState.ball.spinHook * deltaTime;
+    }
+
+    // 2. Analytical Euler Integration: Advance 3D positions sequentially derived from active velocity vector capacities
+    bowlingBall.position.x += gameState.ball.velocity.x * deltaTime; // Displace position along the horizontal width track
+    bowlingBall.position.z += gameState.ball.velocity.z * deltaTime; // Displace position along the forward depth track towards the pit
+
+    // 3. Procedural Rotation Modeling: Calculate continuous visual rotation matching circumstantial wheel roll physics speeds
+    // Linear velocity equals angular velocity multiplied by radius ($V = \omega \cdot R$). Therefore $\omega = V / R$. Bounding radius = 0.45.
+    const forwardLinearSpeed = Math.abs(gameState.ball.velocity.z); // Extract absolute velocity component traversing down-lane
+    bowlingBall.rotation.x += (forwardLinearSpeed / 0.45) * deltaTime; // Increment angular displacement around local X axis to simulate true roll traction
+
+    // 4. Boundary Gutter Ball Detection: Evaluate if ball horizontal extent crosses past physical lane limits (|x| > 1.75 wide)
+    if (!gameState.ball.isGutter && Math.abs(bowlingBall.position.x) > 1.75) {
+      gameState.ball.isGutter = true;                    // Flip systemic evaluation status flag to enforce gutter tracking rules
+      bowlingBall.position.y = -0.05;                    // Depress ball altitude down flush into the physical drop channel floor plane
+      gameState.ball.velocity.x = 0;                     // Wipe out all lateral velocity components immediately so the ball slides purely straight down the gutter
+      console.log("Gutter Ball Detected! Ball dropped into side channel floor tracking tracks.");
+    }
+
+    // 5. Pit Terminal Boundary Detection: Identify when rolling sphere reaches the absolute end limits of the pin layout zone
+    if (bowlingBall.position.z <= -60.0) {
+      gameState.ball.velocity.set(0, 0, 0);              // Freeze all structural velocity components to bring the ball mesh to a dead halt in the pit
+      gameState.phase = 'resolving';                     // Advance global state machine phase string flag to transition into resolution pipelines
+      gameState.ball.resolveTimer = 0.0;                 // Initialize local safety frame accumulator timer for Milestone 3 testing stability
+      console.log("Terminal Boundary Breached: Ball came to rest at pin end. Transitioning to 'resolving' state phase.");
+    }
   }
-  
-  // Future updates (Milestone 3 & 4):
-  // - Compute position adjustments using velocity metrics: position += velocity * deltaTime
-  // - Perform boundary logic to evaluate gutter ball events (|x| > 1.75 lane limits)
-  // - Execute distance loops to assess sphere-to-cylinder pin collision impacts
-  // - Run cascade tracking vectors across the state tracking matrix to trigger falling pin rotations
-  // - Detect terminal roll endings (Z < -60) to advance state flags from rolling into scoring resolution phases
+
+  // MILESTONE 3 INTERLOCK SAFETY HARNESS: Automated testing loop preventing soft-locks before Milestone 6 resets are written
+  if (gameState.phase === 'resolving') {
+    // Accumulate framework timeline metrics inside tracking safety variable
+    gameState.ball.resolveTimer += deltaTime;
+    // Allow a 2-second visual pause frame at the pin deck so players can observe final roll placement coordinates
+    if (gameState.ball.resolveTimer > 2.0) {
+      gameState.ball.aimX = 0.0;                         // Reset horizontal aiming storage tracking coordinates to 0
+      gameState.ball.spinHook = 0.0;                     // Purge active hook vectors to reset ball drift variables to baseline
+      gameState.ball.isGutter = false;                   // Re-assert baseline non-gutter logic validation flags
+      bowlingBall.position.set(0, 0.55, 4);              // Translate ball group position back to starting stance on approach runway track
+      bowlingBall.rotation.set(degrees_to_radians(45), 0, 0); // Restore initial forward angle profile where finger holes tilt up
+      gameState.phase = 'aiming';                        // Return control authority to the player aiming input router systems
+      console.log("Milestone 3 Safety Loop Triggered: Ball successfully reset to approach lane. Ready for next test throw.");
+    }
+  }
 }
 
 
@@ -705,7 +732,7 @@ function animate() {
   updateGame(deltaTime);
 
   // Manage orbit interaction capability tracking blocks based on toggle settings overrides.
-  // MILESTONE 2: We enforce a rule to strictly disable OrbitControls while the ball is rolling down the lane to prevent perspective interference.
+  // We enforce a rule to strictly disable OrbitControls while the ball is rolling down the lane to prevent perspective interference.
   controls.enabled = isOrbitEnabled && (gameState.phase !== 'rolling');
   
   // Process tracking matrices inside controls module to update camera perspective adjustments safely
